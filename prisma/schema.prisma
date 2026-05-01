@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USER (Dashboard user)
+// ============================================================
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  avatar        String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects Project[]
+  accounts Account[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String? @db.Text
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+// ============================================================
+// PROJECT
+// ============================================================
+model Project {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  ownerId        String
+  /// JSON string[] — widget allowed origins
+  allowedDomains Json
+  widgetMode     String   @default("comment")
+  moderationMode String   @default("auto")
+  /// JSON blob (legacy ProjectSettings shape)
+  settings       Json?
+  /// HMAC secret for host-signed identity assertions (`X-Buzzy-Host-Identity` on the public API). Shown once when generated.
+  embedSsoSecret String?  @db.VarChar(128) @map("embed_sso_secret")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner      User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  apiKeys    ApiKey[]
+  comments   Comment[]
+  reviews    Review[]
+  commenters Commenter[]
+  pages      Page[]
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  projectId   String
+  keyHash     String    @unique
+  keyPrefix   String
+  name        String    @default("Default")
+  environment String    @default("live")
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("api_keys")
+}
+
+model Page {
+  id              String   @id @default(uuid())
+  projectId       String
+  url             String   @db.VarChar(2048)
+  slug            String   @db.VarChar(512)
+  title           String?  @db.VarChar(512)
+  ratingSummary   Json?
+  createdAt       DateTime @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  reviews  Review[]
+
+  @@unique([projectId, slug])
+  @@index([projectId])
+  @@map("pages")
+}
+
+model Commenter {
+  id         String   @id @default(uuid())
+  projectId  String
+  externalId String?
+  email      String?
+  name       String
+  avatar     String?
+  provider   String   @default("anonymous")
+  isBanned   Boolean  @default(false)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  reviews  Review[]
+  votes    Vote[]
+
+  @@unique([projectId, email, provider])
+  @@unique([projectId, externalId])
+  @@index([projectId])
+  @@map("commenters")
+}
+
+model Comment {
+  id            String    @id @default(uuid())
+  projectId     String
+  pageId        String
+  commenterId   String
+  parentId      String?
+  content       String    @db.Text
+  htmlContent   String?   @db.Text
+  /// JSON array: `{ kind, url, filename?, content_type? }[]` — images, videos, documents (not inline in html)
+  attachments   Json?
+  status        String    @default("approved")
+  depth         Int       @default(0)
+  upvotes       Int       @default(0)
+  downvotes     Int       @default(0)
+  isPinned      Boolean   @default(false)
+  editedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  commenter Commenter @relation(fields: [commenterId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies   Comment[] @relation("CommentReplies")
+  votes     Vote[]
+  reports   Report[]
+
+  @@index([projectId, pageId, status])
+  @@index([parentId])
+  @@index([commenterId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model Review {
+  id              String    @id @default(uuid())
+  projectId       String
+  pageId          String
+  commenterId     String
+  rating          Int
+  categoryRatings Json?
+  title           String?   @db.VarChar(300)
+  content         String?   @db.Text
+  htmlContent     String?   @db.Text
+  /// JSON array: `{ kind, url, filename?, content_type? }[]` — uploads listed outside the rich-text body
+  attachments     Json?
+  status          String    @default("approved")
+  isVerified      Boolean   @default(false)
+  helpfulCount    Int       @default(0)
+  unhelpfulCount  Int       @default(0)
+  isPinned        Boolean   @default(false)
+  editedAt        DateTime?
+  /// Owner/staff text reply shown below the review on the public widget
+  staffReplyContent String? @db.Text
+  staffReplyHtml    String? @db.Text
+  staffRepliedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  commenter Commenter @relation(fields: [commenterId], references: [id], onDelete: Cascade)
+  votes     Vote[]
+  reports   Report[]
+
+  @@unique([projectId, pageId, commenterId])
+  @@index([projectId, pageId, status])
+  @@index([commenterId])
+  @@index([rating])
+  @@index([createdAt])
+  @@map("reviews")
+}
+
+model Vote {
+  id          String   @id @default(uuid())
+  commentId   String?
+  reviewId    String?
+  commenterId String
+  value       Int
+  createdAt   DateTime @default(now())
+
+  comment   Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  review    Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  commenter Commenter @relation(fields: [commenterId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, commenterId])
+  @@unique([reviewId, commenterId])
+  @@map("votes")
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  commentId   String?
+  reviewId    String?
+  reason      String
+  description String?  @db.Text
+  reporterIp  String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  review  Review?  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@index([reviewId])
+  @@index([status])
+  @@map("reports")
+}

@@ -3,21 +3,204 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Canvas & text */
+  --background: #f4f6f1;
+  --foreground: #0c0f0b;
+  --muted: #5c6658;
+  --muted-fg: #5c6658;
+
+  /* Surfaces */
+  --surface: #ffffff;
+  --surface-muted: #ecefe8;
+  --surface-elevated: #fafcf8;
+  --border: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.14);
+
+  /* Brand wash (honey gold) */
+  --accent: #f5db8d;
+  --accent-hover: #e0c775;
+  --accent-ink: #14110a;
+  --accent-subtle: rgba(245, 219, 141, 0.16);
+  --accent-glow: rgba(245, 219, 141, 0.35);
+
+  /* Dashboard chrome */
+  --sidebar: #0a0c09;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --header-bg: rgba(255, 255, 255, 0.78);
+  --ring-focus: rgba(245, 219, 141, 0.45);
+
+  --canvas-dot: rgba(15, 23, 42, 0.055);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #070806;
+    --foreground: #eef1ea;
+    --muted: #9aa396;
+    --muted-fg: #9aa396;
+
+    --surface: #0f1210;
+    --surface-muted: #151815;
+    --surface-elevated: #121511;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    --accent-subtle: rgba(245, 219, 141, 0.12);
+    --accent-glow: rgba(245, 219, 141, 0.22);
+
+    --sidebar: #050604;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --header-bg: rgba(15, 18, 15, 0.82);
+    --ring-focus: rgba(245, 219, 141, 0.35);
+
+    --canvas-dot: rgba(148, 163, 184, 0.07);
   }
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  @apply font-sans text-base antialiased;
+}
+
+::selection {
+  background: var(--accent-glow);
+  color: var(--accent-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: var(--foreground);
+  }
+}
+
+@layer components {
+  .input-buzzy {
+    @apply mt-1 w-full rounded-xl px-3.5 py-2.5 text-base transition duration-200 focus:outline-none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+  }
+
+  .input-buzzy::placeholder {
+    color: var(--muted);
+    opacity: 0.85;
+  }
+
+  .input-buzzy:hover:not(:disabled) {
+    border-color: var(--border-strong);
+  }
+
+  .input-buzzy:focus {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+    box-shadow: 0 0 0 3px var(--ring-focus);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand px-4 py-2.5 text-base font-semibold text-brand-ink transition duration-200 hover:bg-brand-hover active:scale-[0.98] disabled:pointer-events-none disabled:opacity-55;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-base font-medium transition duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-55;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--foreground);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--foreground) 14%, var(--border-strong));
+    background: var(--surface-muted);
+  }
+
+  .link-brand {
+    @apply text-base font-medium text-brand transition-colors hover:text-brand-hover hover:underline underline-offset-4 decoration-brand/60;
+  }
+
+  .card-surface {
+    @apply rounded-2xl border bg-[var(--surface)] transition-colors duration-200;
+    border-color: var(--border);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .card-surface {
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  /* Primary dashboard panels — content-rich, soft elevation */
+  .dash-panel {
+    @apply rounded-2xl border bg-[var(--surface)] transition-shadow duration-300;
+    border-color: var(--border);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+      0 12px 40px -24px rgba(15, 23, 42, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .dash-panel {
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 14px 48px -28px rgba(0, 0, 0, 0.55);
+    }
+  }
+
+  .dash-kicker {
+    @apply text-xs font-semibold tracking-wide text-brand;
+    letter-spacing: 0.08em;
+  }
+
+  .dash-hero {
+    @apply relative overflow-hidden rounded-2xl border px-5 py-6 sm:px-8 sm:py-8;
+    border-color: var(--border);
+    background:
+      linear-gradient(135deg, var(--accent-subtle) 0%, transparent 42%),
+      linear-gradient(180deg, var(--surface) 0%, var(--surface-elevated) 100%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .dash-hero {
+      background:
+        linear-gradient(135deg, var(--accent-subtle) 0%, transparent 48%),
+        linear-gradient(180deg, var(--surface) 0%, var(--surface-muted) 100%);
+    }
+  }
+
+  .dash-aside {
+    @apply border-t lg:border-l lg:border-t-0;
+    border-color: var(--border);
+    background: linear-gradient(165deg, var(--surface-muted) 0%, var(--surface-elevated) 55%, var(--background) 100%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .dash-aside {
+      background: linear-gradient(165deg, var(--surface-muted) 0%, var(--surface-elevated) 50%, var(--background) 100%);
+    }
+  }
+
+  .bg-app-canvas {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 100% 80% at 20% -20%, var(--accent-subtle), transparent 55%),
+      radial-gradient(ellipse 80% 50% at 100% 0%, rgba(245, 219, 141, 0.06), transparent 45%),
+      radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0);
+    background-size: auto, auto, 24px 24px;
+  }
+
+  .glass-auth-panel {
+    @apply rounded-lg border border-white/10 bg-zinc-900/40 p-8 backdrop-blur-xl;
+  }
+
+  .glass-auth-panel .input-buzzy {
+    @apply border-zinc-600 bg-zinc-950/90 text-white placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-950/90;
+  }
+
 }
 
 @layer utilities {
