@@ -11,6 +11,13 @@ export function clientIp(request: NextRequest): string {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
+/** Persisted on comments/reviews for analytics; null when IP cannot be determined. */
+export function submitterIpFromRequest(request: NextRequest): string | null {
+  const ip = clientIp(request).trim();
+  if (!ip || ip === "unknown") return null;
+  return ip.slice(0, 64);
+}
+
 export function rateLimitEnv(name: string, fallback: number): number {
   const v = process.env[name];
   if (!v) return fallback;

@@ -146,6 +146,8 @@ model Comment {
   /// JSON array: `{ kind, url, filename?, content_type? }[]` — images, videos, documents (not inline in html)
   attachments   Json?
   status        String    @default("approved")
+  /// Client IP at create time (from trusted proxy headers) — for moderation / analytics.
+  submitterIp  String?   @map("submitter_ip") @db.VarChar(64)
   depth         Int       @default(0)
   upvotes       Int       @default(0)
   downvotes     Int       @default(0)
@@ -182,6 +184,8 @@ model Review {
   /// JSON array: `{ kind, url, filename?, content_type? }[]` — uploads listed outside the rich-text body
   attachments     Json?
   status          String    @default("approved")
+  /// Client IP at create time (from trusted proxy headers) — for moderation / analytics.
+  submitterIp       String?   @map("submitter_ip") @db.VarChar(64)
   isVerified      Boolean   @default(false)
   helpfulCount    Int       @default(0)
   unhelpfulCount  Int       @default(0)

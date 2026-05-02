@@ -20,6 +20,7 @@ function serializeReview(row: {
   id: string;
   status: string;
   rating: number;
+  categoryRatings: Prisma.JsonValue | null;
   title: string | null;
   content: string | null;
   htmlContent: string | null;
@@ -27,14 +28,28 @@ function serializeReview(row: {
   staffReplyHtml: string | null;
   staffRepliedAt: Date | null;
   attachments: Prisma.JsonValue | null;
+  submitterIp: string | null;
+  isVerified: boolean;
+  helpfulCount: number;
+  unhelpfulCount: number;
+  isPinned: boolean;
+  editedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   page: { url: string; title: string | null };
-  commenter: { name: string; provider: string; avatar: string | null };
+  commenter: {
+    name: string;
+    email: string | null;
+    externalId: string | null;
+    provider: string;
+    avatar: string | null;
+  };
 }) {
   return {
     id: row.id,
     status: row.status,
     rating: row.rating,
+    categoryRatings: row.categoryRatings,
     title: row.title,
     content: row.content,
     htmlContent: row.htmlContent,
@@ -42,7 +57,14 @@ function serializeReview(row: {
     staffReplyHtml: row.staffReplyHtml,
     staffRepliedAt: row.staffRepliedAt?.toISOString() ?? null,
     attachments: row.attachments,
+    submitterIp: row.submitterIp,
+    isVerified: row.isVerified,
+    helpfulCount: row.helpfulCount,
+    unhelpfulCount: row.unhelpfulCount,
+    isPinned: row.isPinned,
+    editedAt: row.editedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
     page: row.page,
     commenter: row.commenter,
   };
@@ -74,7 +96,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       skip: offset,
       include: {
         page: { select: { url: true, title: true } },
-        commenter: { select: { name: true, provider: true, avatar: true } },
+        commenter: {
+          select: { name: true, email: true, externalId: true, provider: true, avatar: true },
+        },
       },
     });
 

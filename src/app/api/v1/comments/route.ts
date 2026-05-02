@@ -10,6 +10,7 @@ import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import {
   assertCommentPostRateLimit,
   clientIp,
+  submitterIpFromRequest,
 } from "@/lib/public-api/rate-limit-request";
 import { resolveAnonymousCommenterId } from "@/lib/public-api/resolve-anonymous-commenter";
 import { resolveSessionCommenterId } from "@/lib/public-api/resolve-session-commenter";
@@ -182,6 +183,7 @@ export async function POST(request: NextRequest) {
         attachments: attachmentList.length > 0 ? (attachmentList as Prisma.InputJsonValue) : undefined,
         status,
         depth,
+        submitterIp: submitterIpFromRequest(request),
       },
       include: {
         commenter: { select: { name: true, avatar: true } },

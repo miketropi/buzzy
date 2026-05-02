@@ -506,7 +506,7 @@ export function ProjectAppearanceForm({
           {optionsPanel}
         </div>
         <div
-          className={`lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto lg:overflow-x-hidden ${mobileTab === "options" ? "hidden lg:block" : ""}`}
+          className={`lg:sticky lg:top-4 lg:self-start lg:overflow-x-hidden ${mobileTab === "options" ? "hidden lg:block" : ""}`}
         >
           {previewPanel}
         </div>

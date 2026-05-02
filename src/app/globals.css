@@ -201,6 +201,48 @@ body {
     @apply border-zinc-600 bg-zinc-950/90 text-white placeholder:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-950/90;
   }
 
+  /* Dashboard staff reply composer (TipTap) */
+  .staff-reply-tiptap {
+    outline: none;
+    line-height: 1.55;
+  }
+
+  .staff-reply-tiptap p {
+    margin: 0.35em 0;
+  }
+
+  .staff-reply-tiptap p:first-child {
+    margin-top: 0;
+  }
+
+  .staff-reply-tiptap p:last-child {
+    margin-bottom: 0;
+  }
+
+  .staff-reply-tiptap ul,
+  .staff-reply-tiptap ol {
+    margin: 0.35em 0;
+    padding-left: 1.25rem;
+  }
+
+  .staff-reply-tiptap blockquote {
+    margin: 0.35em 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid rgb(148 163 184 / 0.55);
+  }
+
+  .staff-reply-tiptap a {
+    @apply text-violet-700 underline underline-offset-2 dark:text-violet-300;
+  }
+
+  .staff-reply-tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: var(--muted);
+    pointer-events: none;
+    height: 0;
+    opacity: 0.75;
+  }
 }
 
 @layer utilities {

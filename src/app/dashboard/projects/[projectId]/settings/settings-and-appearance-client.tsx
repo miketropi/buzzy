@@ -127,7 +127,7 @@ export function SettingsAndAppearanceClient({
                 </section>
               </div>
 
-              <aside className="dash-aside lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:self-start lg:overflow-y-auto">
+              <aside className="dash-aside lg:sticky lg:top-4 lg:self-start">
                 <div className="px-4 pt-5 sm:px-6">
                   <div
                     className="rounded-xl px-4 py-3"

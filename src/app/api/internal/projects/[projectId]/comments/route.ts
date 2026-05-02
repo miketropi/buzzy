@@ -6,6 +6,7 @@ import { getOrCreateStaffCommenter } from "@/lib/internal/staff-commenter";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
 import { matchesSpamPatterns } from "@/lib/public-api/spam";
+import { submitterIpFromRequest } from "@/lib/public-api/rate-limit-request";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import {
   ForbiddenError,
@@ -35,11 +36,23 @@ function serializeComment(row: {
   content: string;
   htmlContent: string | null;
   attachments: Prisma.JsonValue | null;
+  submitterIp: string | null;
   parentId: string | null;
   depth: number;
+  upvotes: number;
+  downvotes: number;
+  isPinned: boolean;
+  editedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   page: { url: string; title: string | null };
-  commenter: { name: string; provider: string; avatar: string | null };
+  commenter: {
+    name: string;
+    email: string | null;
+    externalId: string | null;
+    provider: string;
+    avatar: string | null;
+  };
 }) {
   return {
     id: row.id,
@@ -47,9 +60,15 @@ function serializeComment(row: {
     content: row.content,
     htmlContent: row.htmlContent,
     attachments: row.attachments,
+    submitterIp: row.submitterIp,
     parentId: row.parentId,
     depth: row.depth,
+    upvotes: row.upvotes,
+    downvotes: row.downvotes,
+    isPinned: row.isPinned,
+    editedAt: row.editedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
     page: row.page,
     commenter: row.commenter,
   };
@@ -81,7 +100,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       skip: offset,
       include: {
         page: { select: { url: true, title: true } },
-        commenter: { select: { name: true, provider: true, avatar: true } },
+        commenter: {
+          select: { name: true, email: true, externalId: true, provider: true, avatar: true },
+        },
       },
     });
 
@@ -169,10 +190,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         htmlContent,
         status: "approved",
         depth: parent.depth + 1,
+        submitterIp: submitterIpFromRequest(request),
       },
       include: {
         page: { select: { url: true, title: true } },
-        commenter: { select: { name: true, provider: true, avatar: true } },
+        commenter: {
+          select: { name: true, email: true, externalId: true, provider: true, avatar: true },
+        },
       },
     });
 

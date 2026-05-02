@@ -8,6 +8,7 @@ import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import {
   assertReviewPostRateLimit,
   clientIp,
+  submitterIpFromRequest,
 } from "@/lib/public-api/rate-limit-request";
 import { recalculatePageRatingSummary } from "@/lib/public-api/rating-summary";
 import {
@@ -161,6 +162,7 @@ export async function POST(request: NextRequest) {
         htmlContent,
         attachments: attachmentList.length > 0 ? (attachmentList as Prisma.InputJsonValue) : undefined,
         status,
+        submitterIp: submitterIpFromRequest(request),
       },
       settings.allowMultipleReviews,
     );
