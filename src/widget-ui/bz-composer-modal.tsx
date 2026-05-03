@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { BzComposerModalFrame, BzModalShortcutHints } from "./bz-composer-modal-frame";
+import { BzComposerModalFrame } from "./bz-composer-modal-frame";
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -179,7 +179,6 @@ export function BzComposerModal({
         >
           {children}
         </BzComposerModalFrame>
-        <BzModalShortcutHints id={hintsId} below />
       </div>
     </div>
   );

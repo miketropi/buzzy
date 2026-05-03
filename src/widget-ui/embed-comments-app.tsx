@@ -370,7 +370,7 @@ export function EmbedCommentsApp({
       });
   }
 
-  const commentStepLabels = ["Your profile & message", "Attachments & post"];
+  const commentStepLabels = ["Profile", "Files"];
   const isEditing = editingId !== null;
 
   return (

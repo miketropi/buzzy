@@ -87,6 +87,31 @@ function Toolbar({ editor, disabled }: { editor: Editor; disabled: boolean }) {
         "Numbered list",
       )}
       {b(
+        "H2",
+        () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        editor.isActive("heading", { level: 2 }),
+        "Heading 2",
+      )}
+      {b(
+        "H3",
+        () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+        editor.isActive("heading", { level: 3 }),
+        "Heading 3",
+      )}
+      {b("`", () => editor.chain().focus().toggleCode().run(), editor.isActive("code"), "Inline code")}
+      {b(
+        "Pre",
+        () => editor.chain().focus().toggleCodeBlock().run(),
+        editor.isActive("codeBlock"),
+        "Code block",
+      )}
+      {b(
+        "—",
+        () => editor.chain().focus().setHorizontalRule().run(),
+        false,
+        "Horizontal rule",
+      )}
+      {b(
         "❝",
         () => editor.chain().focus().toggleBlockquote().run(),
         editor.isActive("blockquote"),
@@ -135,7 +160,9 @@ export const StaffReplyEditor = forwardRef<
     {
       immediatelyRender: false,
       extensions: [
-        StarterKit.configure({ heading: false }),
+        StarterKit.configure({
+          heading: { levels: [2, 3, 4] },
+        }),
         Underline,
         Link.configure({
           openOnClick: false,

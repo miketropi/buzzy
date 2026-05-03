@@ -2,26 +2,37 @@
 
 import type { LegacyRef, ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import { BzIconClose } from "./bz-modal-nav-icons";
 
-export function BzModalShortcutHints({ id, below }: { id: string; below?: boolean }) {
+export function BzModalShortcutHints({
+  id,
+  placement = "inside",
+}: {
+  id: string;
+  /** `inside` = foot of modal sheet; `below` = legacy separate chip under sheet. */
+  placement?: "inside" | "below";
+}) {
   return (
     <div
       id={id}
-      className={`bz-modal-hint-strip${below ? " bz-modal-hint-strip--below" : ""}`}
+      className={`bz-modal-hint-strip${placement === "below" ? " bz-modal-hint-strip--below" : " bz-modal-hint-strip--inside"}`}
       role="note"
     >
       <span className="bz-modal-hint-item">
         <kbd className="bz-kbd">Esc</kbd>
-        <span className="bz-modal-hint-item-text"> closes</span>
+        <span className="bz-modal-hint-item-text"> · outside</span>
       </span>
       <span className="bz-modal-hint-sep" aria-hidden>
         ·
       </span>
-      <span className="bz-modal-hint-item">Tap outside to close</span>
-      <span className="bz-modal-hint-sep" aria-hidden>
+      <span className="bz-modal-hint-item">closes</span>
+      <span className="bz-modal-hint-sep bz-modal-hint-sep--hide-sm" aria-hidden>
         ·
       </span>
-      <span className="bz-modal-hint-item">Two steps — text first, files optional after</span>
+      <span className="bz-modal-hint-item bz-modal-hint-item--wrap">
+        <span className="bz-modal-hint-short">Step 2: files (optional)</span>
+        <span className="bz-modal-hint-long">Step two is only if you want attachments</span>
+      </span>
     </div>
   );
 }
@@ -51,12 +62,13 @@ export function BzComposerModalFrame({
   onClose?: () => void;
   /** Embedded in the dashboard preview: no fixed overlay, open layout. */
   inline?: boolean;
-  /** Optional id of shortcut hints (may live outside the sheet when `below`). */
+  /** Optional id for shortcut hints (rendered inside sheet when set). */
   describedBy?: string;
 }) {
   const safeStep = Math.min(Math.max(0, stepIndex), Math.max(0, totalSteps - 1));
   const stepNum = safeStep + 1;
   const showProgress = totalSteps > 1;
+  const stepLabel = stepLabels[safeStep]?.trim() ?? "";
   const bodyRef = useRef<HTMLDivElement>(null);
   const prevStepRef = useRef<number | null>(null);
 
@@ -89,10 +101,24 @@ export function BzComposerModalFrame({
       aria-labelledby={titleId}
       aria-describedby={describedBy}
     >
+      {inline ? null : (
+        <div className="bz-modal-grab" aria-hidden="true">
+          <span className="bz-modal-grab-bar" />
+        </div>
+      )}
+
       <div className="bz-modal-header">
-        <h2 id={titleId} className="bz-modal-title">
-          {title}
-        </h2>
+        <div className="bz-modal-header-main">
+          <h2 id={titleId} className="bz-modal-title">
+            <span className="bz-modal-title-primary">{title}</span>
+            {showProgress ? (
+              <span className="bz-modal-title-step">
+                {` · ${stepNum} of ${totalSteps}`}
+                {stepLabel ? ` · ${stepLabel}` : ""}
+              </span>
+            ) : null}
+          </h2>
+        </div>
         {onClose ? (
           <button
             type="button"
@@ -100,49 +126,22 @@ export function BzComposerModalFrame({
             aria-label="Close dialog (Escape)"
             onClick={onClose}
           >
-            ×
+            <BzIconClose className="bz-modal-close-icon" />
           </button>
         ) : (
           <span className="bz-modal-close bz-modal-close--preview" aria-hidden="true">
-            ×
+            <BzIconClose className="bz-modal-close-icon" />
           </span>
         )}
       </div>
-
-      {showProgress ? (
-        <div
-          className="bz-modal-progress"
-          role="group"
-          aria-label={`Step ${stepNum} of ${totalSteps}`}
-        >
-          <div className="bz-modal-progress-head">
-            <span className="bz-modal-progress-count">
-              Step {stepNum} of {totalSteps}
-            </span>
-          </div>
-          <div className="bz-modal-progress-track" aria-hidden>
-            {Array.from({ length: totalSteps }, (_, i) => {
-              const done = i < safeStep;
-              const current = i === safeStep;
-              return (
-                <div
-                  key={i}
-                  className={`bz-modal-progress-seg${done ? " bz-modal-progress-seg--done" : ""}${current ? " bz-modal-progress-seg--current" : ""}`}
-                />
-              );
-            })}
-          </div>
-          {stepLabels[safeStep] ? (
-            <p className="bz-modal-step-label">{stepLabels[safeStep]}</p>
-          ) : null}
-        </div>
-      ) : null}
 
       <div ref={bodyRef} className="bz-modal-body">
         {children}
       </div>
 
       <div className="bz-modal-footer">{footer}</div>
+
+      {describedBy ? <BzModalShortcutHints id={describedBy} placement="inside" /> : null}
     </div>
   );
 }

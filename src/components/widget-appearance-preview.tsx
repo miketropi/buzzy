@@ -13,7 +13,7 @@ import {
 } from "@/lib/widget-chrome-tokens";
 import type { PublicWidgetMode } from "@/lib/widget-mode-ux";
 import { modeShowsPublicRatingSummary } from "@/lib/widget-mode-ux";
-import { BzComposerModalFrame, BzModalShortcutHints } from "@/widget-ui/bz-composer-modal-frame";
+import { BzComposerModalFrame } from "@/widget-ui/bz-composer-modal-frame";
 import { BzIconChevronRight } from "@/widget-ui/bz-modal-nav-icons";
 import { WidgetComposerStarsStatic } from "@/widget-ui/bz-composer-stars-static";
 import { WidgetCommentCard } from "@/widget-ui/bz-comment-card";
@@ -259,7 +259,6 @@ export function WidgetAppearancePreview({
           >
             {opts.step0}
           </BzComposerModalFrame>
-          <BzModalShortcutHints id={opts.hintsId} below />
         </div>
       </>
     );
@@ -464,7 +463,7 @@ export function WidgetAppearancePreview({
             modalTitle: "Post a comment",
             titleId: commentModalTitleId,
             hintsId: commentModalHintsId,
-            stepLabels: ["Your profile & message", "Attachments & post"],
+            stepLabels: ["Profile", "Files"],
             step0: commentStepIntro,
           }),
         })}
@@ -482,7 +481,7 @@ export function WidgetAppearancePreview({
             modalTitle: "Write a review",
             titleId: reviewModalTitleId,
             hintsId: reviewModalHintsId,
-            stepLabels: ["Your details & review", "Attachments & submit"],
+            stepLabels: ["Review", "Files"],
             step0: reviewStepIntro,
           }),
         })}
@@ -500,7 +499,7 @@ export function WidgetAppearancePreview({
             modalTitle: "Send a rating",
             titleId: ratingModalTitleId,
             hintsId: ratingModalHintsId,
-            stepLabels: ["Your details & rating", "Attachments & submit"],
+            stepLabels: ["Rating", "Files"],
             step0: ratingStepIntro,
           }),
         })}

@@ -248,8 +248,8 @@ export function EmbedReviewsApp({
 
   const noteLabelId = enableRich ? "buzzy-r-note-editor" : "buzzy-r-note";
   const reviewStepLabels = ratingOnly
-    ? ["Your details & rating", "Attachments & submit"]
-    : ["Your details & review", "Attachments & submit"];
+    ? ["Rating", "Files"]
+    : ["Review", "Files"];
   const modalTitle = ratingOnly ? "Send a rating" : "Write a review";
   const ctaLabel = ratingOnly ? "Rate this" : "Write a review";
 
