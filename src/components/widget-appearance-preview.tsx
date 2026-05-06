@@ -18,6 +18,7 @@ import { BzIconChevronRight } from "@/widget-ui/bz-modal-nav-icons";
 import { WidgetComposerStarsStatic } from "@/widget-ui/bz-composer-stars-static";
 import { WidgetCommentCard } from "@/widget-ui/bz-comment-card";
 import { WidgetReviewCard } from "@/widget-ui/bz-review-card";
+import { BzModalIntro } from "@/widget-ui/bz-modal-intro";
 import { WidgetStaticStars } from "@/widget-ui/bz-stars";
 
 const PreviewRichCommentEditor = dynamic(
@@ -110,10 +111,10 @@ export function WidgetAppearancePreview({
 
   const commentStepIntro = (
     <>
-      <p className="bz-modal-intro">
+      <BzModalIntro>
         Step 1 is your name, optional email, and what you want to say. Step 2 is optional uploads — keep this screen
         clean until you need files.
-      </p>
+      </BzModalIntro>
       <div className="bz-form-field">
         <label className="bz-l" htmlFor="bz-ap-c-name">
           Your name
@@ -143,10 +144,10 @@ export function WidgetAppearancePreview({
 
   const reviewStepIntro = (
     <>
-      <p className="bz-modal-intro">
+      <BzModalIntro>
         Share who you are, rate your experience, and write what stood out. Photos or docs are optional and come next —
         focus on your words first.
-      </p>
+      </BzModalIntro>
       <div className="bz-form-field">
         <label className="bz-l" htmlFor="bz-ap-r-name">
           Your name
@@ -186,10 +187,10 @@ export function WidgetAppearancePreview({
 
   const ratingStepIntro = (
     <>
-      <p className="bz-modal-intro">
+      <BzModalIntro>
         Introduce yourself and tap the stars — then add an optional note. You can attach screenshots or files in the
         next step if that tells the story better.
-      </p>
+      </BzModalIntro>
       <div className="bz-form-field">
         <label className="bz-l" htmlFor="bz-ap-rt-name">
           Your name
@@ -303,7 +304,7 @@ export function WidgetAppearancePreview({
 
   const ratingSummaryBlock =
     showSummary && !isRatingOnly ? (
-      <div className="bz-panel">
+      <div className="bz-embed-section">
         <p className="bz-head">Reviews</p>
         <div className="bz-sum bz-sum-head">
           <span className="bz-big">4.3</span>
@@ -315,7 +316,7 @@ export function WidgetAppearancePreview({
 
   const compactRatingBlock =
     showSummary && isRatingOnly ? (
-      <div className="bz-panel bz-panel--sm">
+      <div className="bz-embed-section">
         <div className="bz-flex-between">
           <div>
             <p className="bz-head">Average rating</p>
@@ -377,9 +378,11 @@ export function WidgetAppearancePreview({
     }
     return (
       <div className="bz-list">
-        {listBodies.map((b, i) => (
-          <WidgetCommentCard key={i} variant="comfortable" body={b} />
-        ))}
+        <div className="bz-entry-list-group">
+          {listBodies.map((b, i) => (
+            <WidgetCommentCard key={i} variant="comfortable" body={b} cardSurface="flat" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -423,17 +426,20 @@ export function WidgetAppearancePreview({
     }
     return (
       <div className="bz-list">
-        {reviewGridData.slice(0, 2).map((row) => (
-          <WidgetReviewCard
-            key={row.name}
-            variant="comfortable"
-            initials={row.initials}
-            name={row.name}
-            body={row.body}
-            starRating={row.stars}
-            scale={scale}
-          />
-        ))}
+        <div className="bz-entry-list-group">
+          {reviewGridData.slice(0, 2).map((row) => (
+            <WidgetReviewCard
+              key={row.name}
+              variant="comfortable"
+              initials={row.initials}
+              name={row.name}
+              body={row.body}
+              starRating={row.stars}
+              scale={scale}
+              surface="flat"
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -443,7 +449,7 @@ export function WidgetAppearancePreview({
 
   function threadPanel(opts: { title: string; entries: ReactNode; footer: ReactNode }) {
     return (
-      <div className="bz-panel">
+      <div className="bz-embed-section">
         <p className="bz-head">{opts.title}</p>
         <div className="bz-thread-entries">{opts.entries}</div>
         {opts.footer}

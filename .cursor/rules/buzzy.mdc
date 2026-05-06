@@ -1,0 +1,12 @@
+---
+description: Buzzy repo orientation — read before cross-cutting changes
+alwaysApply: true
+---
+
+# Buzzy
+
+Embeddable comments/reviews/ratings: Next.js 14 app + **public** `/api/v1/*` (embed) vs **session** `/api/internal/*` and `/dashboard/*`. Middleware: `src/middleware.ts`.
+
+**Start here:** root `AGENTS.md`. **Embed contract & SDK:** `PROJECT.md`. **Setup:** `README.md`.
+
+**Embed workflow:** `src/embed/widget-chrome.css` → `npm run gen:widget-chrome` (generated TS in `src/lib/generated/`) → `npm run build:embed` → `public/buzzy.js` + `public/buzzy/embed-*.js`. Widget UI lives in `src/widget-ui/` (`bz-*` classes, no Tailwind). Do not hand-edit generated widget-chrome files.

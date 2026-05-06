@@ -116,9 +116,11 @@ model Commenter {
   id         String   @id @default(uuid())
   projectId  String
   externalId String?
-  email      String?
+  /// Public guest / SSO email — default `String` + unique index is tight on MySQL (191).
+  email      String? @db.VarChar(255)
   name       String
-  avatar     String?
+  /// Host SSO avatars are often long CDN URLs (default Prisma `String` is 191 on MySQL).
+  avatar     String? @db.VarChar(2048)
   provider   String   @default("anonymous")
   isBanned   Boolean  @default(false)
   metadata   Json?
@@ -129,7 +131,6 @@ model Commenter {
   reviews  Review[]
   votes    Vote[]
 
-  @@unique([projectId, email, provider])
   @@unique([projectId, externalId])
   @@index([projectId])
   @@map("commenters")

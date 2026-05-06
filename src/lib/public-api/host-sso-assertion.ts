@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { z } from "zod";
 
 import { BUZZY_HOST_IDENTITY_HEADER } from "@/lib/public-api/buzzy-host-identity-header";
 
@@ -28,7 +29,11 @@ type RawPayload = {
   sub?: unknown;
   name?: unknown;
   email?: unknown;
+  /** OIDC-style alias used by some IdPs */
+  mail?: unknown;
   avatar?: unknown;
+  /** OIDC / Google-style profile image */
+  picture?: unknown;
   username?: unknown;
   pid?: unknown;
   exp?: unknown;
@@ -57,25 +62,25 @@ function normalizeAvatar(url: unknown): string | null {
   return t;
 }
 
-function normalizeEmail(raw: unknown, allow: boolean): string | null {
-  if (!allow) return null;
+/**
+ * Email from a signed Host SSO payload — use Zod’s parser (stricter than a single regex, matches other public API paths).
+ */
+function normalizeSignedSsoEmail(raw: unknown): string | null {
   if (raw == null || raw === "") return null;
   if (typeof raw !== "string") return null;
   const t = raw.trim();
   if (!t || t.length > MAX_EMAIL_LEN) return null;
-  const basic = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return basic.test(t) ? t : null;
+  return z.string().email().safeParse(t).success ? t : null;
 }
 
 /**
- * Verifies `{payloadBase64url}.{sigBase64url}` signed with HMAC-SHA256(secret).
- * Payload must include `sub`, `name`, `exp` (unix sec), `pid` (Buzzy project id).
+ * Verifies Host SSO assertion. Email and avatar are taken from the signed payload when valid.
+ * Accepts `mail` / `picture` as aliases for `email` / `avatar` (common IdP / OIDC fields).
  */
 export function verifyHostSsoAssertion(
   token: string | null | undefined,
   expectedProjectId: string,
   secret: string | null | undefined,
-  opts: { allowGuestEmail: boolean },
 ): HostSsoClaims | null {
   if (!token?.trim() || !secret?.trim()) return null;
   const dot = token.indexOf(".");
@@ -129,11 +134,14 @@ export function verifyHostSsoAssertion(
     username = u;
   }
 
+  const rawEmail = p.email ?? p.mail;
+  const rawAvatar = p.avatar ?? p.picture;
+
   return {
     sub,
     name,
-    email: normalizeEmail(p.email, opts.allowGuestEmail) ?? undefined,
-    avatar: normalizeAvatar(p.avatar),
+    email: normalizeSignedSsoEmail(rawEmail) ?? undefined,
+    avatar: normalizeAvatar(rawAvatar),
     username,
   };
 }

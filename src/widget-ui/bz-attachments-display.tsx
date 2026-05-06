@@ -1,5 +1,10 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useState } from "react";
 import type { EmbedAttachment } from "./attachment-types";
+import { BzAttachmentLightbox } from "./bz-attachment-lightbox";
+import { BzPlayCircleIcon } from "./bz-icons";
 
 function group(items: EmbedAttachment[]) {
   return {
@@ -21,6 +26,8 @@ export function BzAttachmentsDisplay({
   items: EmbedAttachment[];
   compact?: boolean;
 }) {
+  const [viewer, setViewer] = useState<EmbedAttachment | null>(null);
+
   if (!items.length) return null;
   const g = group(items);
   const sec = (title: string, inner: ReactNode) =>
@@ -35,15 +42,15 @@ export function BzAttachmentsDisplay({
     g.images.length > 0 ? (
       <div className={`bz-attachments-grid${compact ? " bz-attachments-grid--compact" : ""}`}>
         {g.images.map((a) => (
-          <a
+          <button
             key={a.url}
-            href={a.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bz-attachments-thumb-wrap"
+            type="button"
+            className="bz-attachments-thumb-trigger"
+            onClick={() => setViewer(a)}
+            aria-label={`View image: ${labelFile(a)}`}
           >
             <img src={a.url} alt="" className="bz-attachments-thumb" loading="lazy" />
-          </a>
+          </button>
         ))}
       </div>
     ) : null;
@@ -52,14 +59,25 @@ export function BzAttachmentsDisplay({
     g.videos.length > 0 ? (
       <div className="bz-attachments-videos">
         {g.videos.map((a) => (
-          <video
+          <button
             key={a.url}
-            className="bz-attachments-video"
-            src={a.url}
-            controls
-            playsInline
-            preload="metadata"
-          />
+            type="button"
+            className="bz-attachments-video-trigger"
+            onClick={() => setViewer(a)}
+            aria-label={`Play video: ${labelFile(a)}`}
+          >
+            <video
+              className="bz-attachments-video-poster"
+              src={a.url}
+              muted
+              playsInline
+              preload="metadata"
+              aria-hidden
+            />
+            <span className="bz-attachments-video-play" aria-hidden>
+              <BzPlayCircleIcon className="bz-attachments-video-play-ico" />
+            </span>
+          </button>
         ))}
       </div>
     ) : null;
@@ -69,9 +87,14 @@ export function BzAttachmentsDisplay({
       <ul className="bz-attachments-docs">
         {g.documents.map((a) => (
           <li key={a.url}>
-            <a href={a.url} target="_blank" rel="noopener noreferrer" className="bz-link">
+            <button
+              type="button"
+              className="bz-attachments-doc-trigger"
+              onClick={() => setViewer(a)}
+              aria-label={`View file: ${labelFile(a)}`}
+            >
               {labelFile(a)}
-            </a>
+            </button>
           </li>
         ))}
       </ul>
@@ -82,6 +105,7 @@ export function BzAttachmentsDisplay({
       {sec("Images", imgGrid)}
       {sec("Videos", vidBlock)}
       {sec("Documents", docList)}
+      <BzAttachmentLightbox attachment={viewer} onClose={() => setViewer(null)} />
     </div>
   );
 }

@@ -225,17 +225,69 @@ body {
     padding-left: 1.25rem;
   }
 
+  /* Grouped secondary surface — aligned with iOS/macOS Mail-style quote blocks */
   .staff-reply-tiptap blockquote {
-    margin: 0.5rem 0;
-    padding: 0.35rem 0.75rem;
-    border-left: 3px solid rgb(139 92 246 / 0.65);
-    background: rgb(139 92 246 / 0.06);
-    border-radius: 0.35rem;
+    position: relative;
+    margin: 0.65rem 0;
+    padding: 0.75rem 0.75rem 0.75rem 1.2rem;
+    border: none;
+    border-radius: 0.625rem;
+    background: rgb(232 236 242);
+    box-shadow: inset 0 0 0 1px rgb(60 60 67 / 0.12);
+    color: rgb(100 116 139);
+    font-size: 0.9375rem;
+    font-style: normal;
+    font-weight: 400;
+    letter-spacing: -0.011em;
+    line-height: 1.47;
+    -webkit-font-smoothing: antialiased;
   }
 
   .dark .staff-reply-tiptap blockquote {
-    border-left-color: rgb(167 139 250 / 0.7);
-    background: rgb(139 92 246 / 0.09);
+    background: rgb(44 44 46);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+    color: rgb(142 142 147);
+  }
+
+  .staff-reply-tiptap blockquote::before {
+    content: "";
+    position: absolute;
+    left: 0.55rem;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 3px;
+    border-radius: 999px;
+    background: color-mix(in srgb, rgb(139 92 246) 35%, rgb(148 163 184));
+    pointer-events: none;
+  }
+
+  .dark .staff-reply-tiptap blockquote::before {
+    background: color-mix(in srgb, rgb(167 139 250) 38%, rgb(142 142 147));
+  }
+
+  .staff-reply-tiptap blockquote strong {
+    color: rgb(51 65 85);
+    font-weight: 600;
+  }
+
+  .dark .staff-reply-tiptap blockquote strong {
+    color: rgb(229 231 235);
+  }
+
+  .staff-reply-tiptap blockquote code {
+    font-style: normal;
+  }
+
+  .staff-reply-tiptap blockquote > p {
+    margin: 0.28rem 0;
+  }
+
+  .staff-reply-tiptap blockquote > p:first-child {
+    margin-top: 0;
+  }
+
+  .staff-reply-tiptap blockquote > p:last-child {
+    margin-bottom: 0;
   }
 
   .staff-reply-tiptap a {

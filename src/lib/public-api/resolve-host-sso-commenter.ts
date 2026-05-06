@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { ForbiddenError } from "@/lib/utils/errors";
 import type { HostSsoClaims } from "@/lib/public-api/host-sso-assertion";
 import { HOST_SSO_PROVIDER } from "@/lib/public-api/host-sso-assertion";
-import type { EffectiveProjectSettings } from "@/lib/public-api/project-settings";
 
 function mergeMetadata(
   prev: Prisma.JsonValue | null | undefined,
@@ -20,13 +19,8 @@ function mergeMetadata(
   return base as Prisma.InputJsonValue;
 }
 
-export async function upsertHostSsoCommenter(
-  projectId: string,
-  claims: HostSsoClaims,
-  settings: EffectiveProjectSettings,
-): Promise<string> {
-  const emailNorm =
-    settings.allowGuestEmail && claims.email ? claims.email.trim() || null : null;
+export async function upsertHostSsoCommenter(projectId: string, claims: HostSsoClaims): Promise<string> {
+  const emailNorm = claims.email ? claims.email.trim() || null : null;
 
   const existing = await prisma.commenter.findFirst({
     where: {

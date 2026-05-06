@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
  * Example: build a Host SSO assertion for X-Buzzy-Host-Identity.
+ * Claims: `pid`, `sub`, `name`, `exp` required. Optional: `email` (or `mail`), `avatar` (or `picture`, HTTPS),
+ * `username`, `iat`.
+ *
  * Usage:
  *   BUZZY_PROJECT_ID=<uuid> BUZZY_HOST_SSO_SECRET=<secret> node scripts/sign-host-sso-example.mjs
  *

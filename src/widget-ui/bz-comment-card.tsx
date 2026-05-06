@@ -5,8 +5,18 @@ import { BzReplyIcon, BzThumbDownIcon, BzThumbUpIcon } from "./bz-icons";
 import type { EmbedAttachment } from "./attachment-types";
 import { BzAttachmentsDisplay } from "./bz-attachments-display";
 import { initialsFromName } from "./initials";
+import { trustedCommenterAvatarUrl } from "./trusted-commenter-avatar-url";
 
 type Variant = "comfortable" | "compact";
+
+type CommentCardSurface = "raised" | "flat" | "nestedReply";
+
+function commentArticleClass(surface: CommentCardSurface) {
+  const base = "bz-card bz-thread-card";
+  if (surface === "raised") return base;
+  if (surface === "nestedReply") return `${base} bz-card--surface-nested-reply`;
+  return `${base} bz-card--surface-flat`;
+}
 
 export type ThreadComment = {
   id: string;
@@ -20,7 +30,7 @@ export type ThreadComment = {
   you_own?: boolean;
   can_edit?: boolean;
   edited_at?: string | null;
-  commenter?: { name?: string };
+  commenter?: { name?: string; avatar?: string | null };
   created_at?: string;
   updated_at?: string;
   replies?: ThreadComment[];
@@ -69,6 +79,8 @@ function formatCommentMeta(iso?: string | null): string {
 type BodyProps = {
   variant: Variant;
   initials: string;
+  /** HTTPS URL from API; initials used when absent. */
+  avatarUrl?: string | null;
   name: string;
   body: string;
   htmlBody?: string | null;
@@ -89,6 +101,7 @@ type BodyProps = {
 export function WidgetCommentCardBody({
   variant,
   initials,
+  avatarUrl,
   name,
   body,
   htmlBody,
@@ -103,6 +116,7 @@ export function WidgetCommentCardBody({
   editedAt,
   canEdit = false,
 }: BodyProps) {
+  const avatar = trustedCommenterAvatarUrl(avatarUrl);
   const ctx = useCommentThread();
   const interactive = Boolean(commentId && ctx);
 
@@ -203,8 +217,13 @@ export function WidgetCommentCardBody({
 
   return (
     <div className="bz-row bz-entry-row">
-      <div className={`bz-av ${avatarClass(variant)}`} aria-hidden>
-        {initials}
+      <div className={`bz-av ${avatarClass(variant)}${avatar ? " bz-av--photo" : ""}`} aria-hidden>
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element -- external avatar from trusted API
+          <img className="bz-av-img" src={avatar} alt="" width={44} height={44} loading="lazy" />
+        ) : (
+          initials
+        )}
       </div>
       <div className="bz-stack bz-entry-stack">
         <header className="bz-entry-header">
@@ -242,6 +261,7 @@ export function WidgetCommentCard({
   body,
   meta,
   showActions = true,
+  cardSurface = "raised",
 }: {
   variant: Variant;
   initials?: string;
@@ -249,14 +269,17 @@ export function WidgetCommentCard({
   body?: string;
   meta?: string;
   showActions?: boolean;
+  /** `flat`: list-style dividers · `raised`: grid / carousel tiles (default). */
+  cardSurface?: "raised" | "flat";
 }) {
   const resolvedName = name ?? "Alex M.";
   const initials = initialsProp ?? initialsFromName(resolvedName);
   return (
-    <article className="bz-card bz-thread-card">
+    <article className={commentArticleClass(cardSurface === "flat" ? "flat" : "raised")}>
       <WidgetCommentCardBody
         variant={variant}
         initials={initials}
+        avatarUrl={null}
         name={resolvedName}
         body={
           body ??
@@ -283,7 +306,7 @@ export function WidgetCommentThread({
     return (
       <div className="bz-grid bz-grid--2">
         {items.map((c, i) => (
-          <CommentThreadNode key={c.id || `c-${i}`} node={c} variant="comfortable" />
+          <CommentThreadNode key={c.id || `c-${i}`} node={c} variant="comfortable" cardSurface="raised" />
         ))}
       </div>
     );
@@ -295,7 +318,7 @@ export function WidgetCommentThread({
         <div className="bz-carousel">
           {items.map((c, i) => (
             <div key={c.id || `c-${i}`} className="bz-carousel-card">
-              <CommentThreadNode node={c} variant="compact" />
+              <CommentThreadNode node={c} variant="compact" cardSurface="raised" />
               <p className="bz-carousel-label">Comment {i + 1}</p>
             </div>
           ))}
@@ -304,27 +327,39 @@ export function WidgetCommentThread({
     );
   }
   return (
-    <>
-      {items.map((c, i) => (
-        <CommentThreadNode key={c.id || `c-${i}`} node={c} variant={variant} />
-      ))}
-    </>
+    <div className="bz-list bz-stack">
+      <div className="bz-entry-list-group">
+        {items.map((c, i) => (
+          <CommentThreadNode key={c.id || `c-${i}`} node={c} variant={variant} cardSurface="flat" />
+        ))}
+      </div>
+    </div>
   );
 }
 
-function CommentThreadNode({ node, variant }: { node: ThreadComment; variant: Variant }) {
+function CommentThreadNode({
+  node,
+  variant,
+  cardSurface,
+}: {
+  node: ThreadComment;
+  variant: Variant;
+  cardSurface: CommentCardSurface;
+}) {
   const name = node.commenter?.name ? String(node.commenter.name) : "Anonymous";
   const initials = initialsFromName(name);
+  const avatarUrl = node.commenter?.avatar ?? null;
   const createdRaw = node.created_at != null ? String(node.created_at) : "";
   const meta = formatCommentMeta(createdRaw || undefined);
   const body = String(node.content || "");
   const atts = (node.attachments ?? []) as EmbedAttachment[];
   const replies = node.replies || [];
   return (
-    <article className="bz-card bz-thread-card">
+    <article className={commentArticleClass(cardSurface)}>
       <WidgetCommentCardBody
         variant={variant}
         initials={initials}
+        avatarUrl={avatarUrl}
         name={name}
         body={body}
         htmlBody={node.html_content ?? null}
@@ -342,7 +377,7 @@ function CommentThreadNode({ node, variant }: { node: ThreadComment; variant: Va
       {replies.length > 0 ? (
         <div className="bz-replies" role="group" aria-label="Replies">
           {replies.map((r, j) => (
-            <CommentThreadNode key={r.id || `r-${j}`} node={r} variant="compact" />
+            <CommentThreadNode key={r.id || `r-${j}`} node={r} variant="compact" cardSurface="nestedReply" />
           ))}
         </div>
       ) : null}

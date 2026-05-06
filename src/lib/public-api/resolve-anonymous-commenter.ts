@@ -16,13 +16,11 @@ export async function resolveAnonymousCommenterId(
 ): Promise<string> {
   const rawSso = ctx.request.headers.get(BUZZY_HOST_IDENTITY_HEADER)?.trim();
   if (rawSso && ctx.project.embedSsoSecret) {
-    const claims = verifyHostSsoAssertion(rawSso, ctx.project.id, ctx.project.embedSsoSecret, {
-      allowGuestEmail: settings.allowGuestEmail,
-    });
+    const claims = verifyHostSsoAssertion(rawSso, ctx.project.id, ctx.project.embedSsoSecret);
     if (!claims) {
       throw new ForbiddenError("Invalid host identity assertion");
     }
-    return upsertHostSsoCommenter(ctx.project.id, claims, settings);
+    return upsertHostSsoCommenter(ctx.project.id, claims);
   }
 
   const token = ctx.request.headers.get("x-commenter-token");

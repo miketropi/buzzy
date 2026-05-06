@@ -7,7 +7,9 @@ import { WidgetCommentThread, type ThreadComment } from "./bz-comment-card";
 import { BzAttachmentsPanel } from "./bz-attachments-panel";
 import { BzAttachmentsDisplay } from "./bz-attachments-display";
 import { BzCommentEditor, type BzCommentEditorRef } from "./bz-comment-editor";
+import { BzComposerSsoSummary } from "./bz-composer-sso-summary";
 import { BzComposerModal } from "./bz-composer-modal";
+import { BzModalIntro } from "./bz-modal-intro";
 import { BzIconChevronLeft, BzIconChevronRight } from "./bz-modal-nav-icons";
 import type { EmbedAttachment } from "./attachment-types";
 import { normalizeEntryLayout } from "./entry-layout";
@@ -16,6 +18,7 @@ import {
   shouldSendRichHtml,
   strippedFromHtml,
 } from "./rich-composer-helpers";
+import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 
 type Features = {
   enable_replies?: boolean;
@@ -43,6 +46,8 @@ export function EmbedCommentsApp({
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(() => getEmbedProfile().name ?? "");
   const [email, setEmail] = useState(() => getEmbedProfile().email ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(() => getEmbedProfile().avatarUrl ?? "");
+  const hostSsoProvisioned = useHostIdentityProvisioned();
   const [plainContent, setPlainContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -83,6 +88,7 @@ export function EmbedCommentsApp({
       const p = getEmbedProfile();
       setName(p.name ?? "");
       setEmail(p.email ?? "");
+      setAvatarUrl(p.avatarUrl ?? "");
     };
     sync();
     globalThis.addEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
@@ -202,7 +208,7 @@ export function EmbedCommentsApp({
   const goCommentStep2 = useCallback(() => {
     setErr("");
     if (editingId) return;
-    if (!name.trim()) {
+    if (!hostSsoProvisioned && !name.trim()) {
       setErr("Please enter your name.");
       return;
     }
@@ -211,7 +217,7 @@ export function EmbedCommentsApp({
       setRichDraftHtml(html);
     }
     setComposerStep(1);
-  }, [name, enableRich, editingId]);
+  }, [name, enableRich, editingId, hostSsoProvisioned]);
 
   function submitComment() {
     setErr("");
@@ -288,11 +294,13 @@ export function EmbedCommentsApp({
 
     setSubmitting(true);
 
+    const postName = (name.trim() || "Community member").slice(0, 120);
+
     const body: Record<string, unknown> = {
       page_url: ctx.pageUrl,
       page_title: ctx.pageTitle,
       commenter: {
-        name: name.trim(),
+        name: postName,
         email: email.trim(),
       },
     };
@@ -330,7 +338,7 @@ export function EmbedCommentsApp({
 
     if (parentId) body.parent_id = parentId;
 
-    if (!name.trim()) {
+    if (!hostSsoProvisioned && !name.trim()) {
       setErr("Name is required.");
       setSubmitting(false);
       return;
@@ -375,20 +383,14 @@ export function EmbedCommentsApp({
 
   return (
     <div className="bz-main-stack">
-      <div className="bz-panel">
+      <div className="bz-embed-section">
         <p className="bz-head">Comments</p>
         <CommentThreadContext.Provider value={threadCtx}>
           <div className="bz-thread-entries">
             {loading ? (
               <p className="bz-meta">Loading…</p>
             ) : rows.length ? (
-              entryLayout === "list" ? (
-                <div className="bz-list bz-stack">
-                  <WidgetCommentThread items={rows} variant="comfortable" entryLayout="list" />
-                </div>
-              ) : (
-                <WidgetCommentThread items={rows} variant="comfortable" entryLayout={entryLayout} />
-              )
+              <WidgetCommentThread items={rows} variant="comfortable" entryLayout={entryLayout} />
             ) : (
               <p className="bz-meta">No comments yet.</p>
             )}
@@ -483,10 +485,10 @@ export function EmbedCommentsApp({
           {err && composerOpen ? <p className="bz-msg">{err}</p> : null}
           {isEditing ? (
             <>
-              <p className="bz-modal-intro">
+              <BzModalIntro>
                 Update your text here. You can edit for a short time after posting, on the same browser you used to
                 comment. Existing attachments stay on the comment.
-              </p>
+              </BzModalIntro>
               {attachments.length > 0 ? (
                 <div className="bz-form-field">
                   <span className="bz-l">Attachments</span>
@@ -521,44 +523,62 @@ export function EmbedCommentsApp({
             </>
           ) : composerStep === 0 ? (
             <>
-              {parentId ? (
-                <p className="bz-modal-intro">
+              {hostSsoProvisioned ? (
+                parentId ? (
+                  <BzModalIntro>
+                    You&apos;re replying in a thread — your note nests under the original comment. Add images or documents
+                    in step 2, or skip straight to post if it&apos;s text only.
+                  </BzModalIntro>
+                ) : (
+                  <BzModalIntro>
+                    You&apos;re signed in with your host account below. Step 2 is optional uploads — add files there or skip
+                    straight to post.
+                  </BzModalIntro>
+                )
+              ) : parentId ? (
+                <BzModalIntro>
                   You&apos;re replying in a thread — your note nests under the original comment. Add images or documents
                   in step 2, or skip straight to post if it&apos;s text only.
-                </p>
+                </BzModalIntro>
               ) : (
-                <p className="bz-modal-intro">
+                <BzModalIntro>
                   Step 1 is your name, optional email, and what you want to say. Step 2 is optional uploads — keep this
                   screen clean until you need files.
-                </p>
+                </BzModalIntro>
               )}
-              <div className="bz-form-field">
-                <label className="bz-l" htmlFor="buzzy-c-name">
-                  Your name
-                </label>
-                <input
-                  id="buzzy-c-name"
-                  className="bz-in"
-                  name="name"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="bz-form-field">
-                <label className="bz-l" htmlFor="buzzy-c-email">
-                  Email (optional)
-                </label>
-                <input
-                  id="buzzy-c-email"
-                  className="bz-in"
-                  type="email"
-                  name="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+              {hostSsoProvisioned ? (
+                <BzComposerSsoSummary name={name.trim()} email={email.trim()} avatarUrl={avatarUrl.trim() || undefined} />
+              ) : (
+                <>
+                  <div className="bz-form-field">
+                    <label className="bz-l" htmlFor="buzzy-c-name">
+                      Your name
+                    </label>
+                    <input
+                      id="buzzy-c-name"
+                      className="bz-in"
+                      name="name"
+                      autoComplete="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div className="bz-form-field">
+                    <label className="bz-l" htmlFor="buzzy-c-email">
+                      Email (optional)
+                    </label>
+                    <input
+                      id="buzzy-c-email"
+                      className="bz-in"
+                      type="email"
+                      name="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
               <div className="bz-form-field">
                 <label className="bz-l" htmlFor={enableRich ? "buzzy-c-editor" : "buzzy-c-content"}>
                   Comment
@@ -587,10 +607,10 @@ export function EmbedCommentsApp({
             </>
           ) : (
             <>
-              <p className="bz-modal-intro">
+              <BzModalIntro>
                 Optional: attach images, PDFs, Word files, or a short video — or leave this step empty and post with
                 just what you wrote in step 1.
-              </p>
+              </BzModalIntro>
               <div className="bz-form-field">
                 <label className="bz-l" htmlFor="buzzy-c-attachments">
                   Attachments

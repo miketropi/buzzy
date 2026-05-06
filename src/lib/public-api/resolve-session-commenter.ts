@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyCommenterToken } from "@/lib/public-api/commenter-token";
 import { BUZZY_HOST_IDENTITY_HEADER } from "@/lib/public-api/buzzy-host-identity-header";
 import { HOST_SSO_PROVIDER, verifyHostSsoAssertion } from "@/lib/public-api/host-sso-assertion";
+import { upsertHostSsoCommenter } from "@/lib/public-api/resolve-host-sso-commenter";
 import { ForbiddenError } from "@/lib/utils/errors";
 import type { EffectiveProjectSettings } from "@/lib/public-api/project-settings";
 
@@ -22,23 +23,11 @@ export async function resolveSessionCommenterId(
 ): Promise<string | null> {
   const rawHeader = request.headers.get(BUZZY_HOST_IDENTITY_HEADER)?.trim();
   if (rawHeader && project.embedSsoSecret) {
-    const claims = verifyHostSsoAssertion(rawHeader, project.id, project.embedSsoSecret, {
-      allowGuestEmail: settings.allowGuestEmail,
-    });
+    const claims = verifyHostSsoAssertion(rawHeader, project.id, project.embedSsoSecret);
     if (!claims) {
       throw new ForbiddenError("Invalid host identity assertion");
     }
-    const row = await prisma.commenter.findFirst({
-      where: {
-        projectId: project.id,
-        provider: HOST_SSO_PROVIDER,
-        externalId: claims.sub,
-      },
-    });
-    if (row?.isBanned) {
-      throw new ForbiddenError();
-    }
-    return row?.id ?? null;
+    return upsertHostSsoCommenter(project.id, claims);
   }
 
   const tok = verifyCommenterToken(request.headers.get("x-commenter-token"), project.id);
@@ -64,9 +53,7 @@ export async function assertRequestActsAsCommenter(
 
   const rawSso = request.headers.get(BUZZY_HOST_IDENTITY_HEADER)?.trim();
   if (rawSso && project.embedSsoSecret) {
-    const claims = verifyHostSsoAssertion(rawSso, project.id, project.embedSsoSecret, {
-      allowGuestEmail: settings.allowGuestEmail,
-    });
+    const claims = verifyHostSsoAssertion(rawSso, project.id, project.embedSsoSecret);
     if (!claims) {
       throw new ForbiddenError("Invalid host identity assertion");
     }

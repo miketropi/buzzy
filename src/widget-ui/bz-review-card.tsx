@@ -3,6 +3,7 @@ import { BzAttachmentsDisplay } from "./bz-attachments-display";
 import type { EmbedAttachment } from "./attachment-types";
 import { WidgetStaticStars } from "./bz-stars";
 import { initialsFromName } from "./initials";
+import { trustedCommenterAvatarUrl } from "./trusted-commenter-avatar-url";
 
 type Variant = "comfortable" | "compact";
 
@@ -26,6 +27,7 @@ function metaClass(variant: Variant) {
 export function WidgetReviewCard({
   variant,
   initials: initialsProp,
+  avatarUrl,
   name,
   body,
   htmlBody,
@@ -36,9 +38,12 @@ export function WidgetReviewCard({
   starRating,
   scale = 5,
   meta,
+  surface = "raised",
 }: {
   variant: Variant;
   initials?: string;
+  /** HTTPS URL from API `commenter.avatar`; initials when absent. */
+  avatarUrl?: string | null;
   name?: string;
   body?: string;
   /** Sanitized HTML from API `html_content`. */
@@ -53,9 +58,12 @@ export function WidgetReviewCard({
   scale?: number;
   /** e.g. "Verified · 2h ago" in preview; optional in embed */
   meta?: string;
+  /** `flat`: vertical list rows · `raised`: grid/carousel cards. */
+  surface?: "raised" | "flat";
 }) {
   const resolvedName = name ?? "Alex M.";
   const initials = initialsProp ?? initialsFromName(resolvedName);
+  const photo = trustedCommenterAvatarUrl(avatarUrl);
   const resolvedMeta = meta ?? "Verified · 2h ago";
   const atts = attachments ?? [];
   const hideSynthetic =
@@ -92,10 +100,19 @@ export function WidgetReviewCard({
       </div>
     ) : null;
 
+  const surfaceClass = surface === "flat" ? " bz-card--surface-flat" : "";
+
   return (
-    <div className="bz-card">
+    <div className={`bz-card${surfaceClass}`}>
       <div className="bz-row">
-        <div className={`bz-av ${avatarClass(variant)}`}>{initials}</div>
+        <div className={`bz-av ${avatarClass(variant)}${photo ? " bz-av--photo" : ""}`}>
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external avatar from trusted API
+            <img className="bz-av-img" src={photo} alt="" width={44} height={44} loading="lazy" />
+          ) : (
+            initials
+          )}
+        </div>
         <div className="bz-stack">
           <div className="bz-inline-row">
             <span className={`bz-name ${nameClass(variant)}`}>{resolvedName}</span>
@@ -121,7 +138,7 @@ export type ReviewFeedItem = {
   html_content?: string | null;
   attachments?: EmbedAttachment[];
   created_at?: string;
-  commenter?: { name?: string };
+  commenter?: { name?: string; avatar?: string | null };
   staff_reply_content?: string | null;
   staff_reply_html?: string | null;
   staff_replied_at?: string | null;
@@ -129,6 +146,7 @@ export type ReviewFeedItem = {
 
 function reviewFeedRowProps(r: ReviewFeedItem) {
   const rname = r.commenter?.name ? String(r.commenter.name) : "Anonymous";
+  const avatarUrl = r.commenter?.avatar ?? null;
   const rt = Number(r.rating) || 0;
   const meta = String(r.created_at || "").slice(0, 10);
   const html =
@@ -145,6 +163,7 @@ function reviewFeedRowProps(r: ReviewFeedItem) {
       : undefined;
   return {
     rname,
+    avatarUrl,
     rt,
     meta,
     body: html ? undefined : textBody,
@@ -173,6 +192,7 @@ export function WidgetReviewFeed({
         {reviews.map((r, i) => {
           const {
             rname,
+            avatarUrl,
             rt,
             meta,
             body,
@@ -187,6 +207,7 @@ export function WidgetReviewFeed({
               key={r.id ?? i}
               variant="comfortable"
               initials={initialsFromName(rname)}
+              avatarUrl={avatarUrl}
               name={rname}
               body={body}
               htmlBody={htmlBody}
@@ -210,6 +231,7 @@ export function WidgetReviewFeed({
         {reviews.map((r, i) => {
           const {
             rname,
+            avatarUrl,
             rt,
             meta,
             body,
@@ -224,6 +246,7 @@ export function WidgetReviewFeed({
               <WidgetReviewCard
                 variant="compact"
                 initials={initialsFromName(rname)}
+                avatarUrl={avatarUrl}
                 name={rname}
                 body={body}
                 htmlBody={htmlBody}
@@ -245,36 +268,41 @@ export function WidgetReviewFeed({
 
   return (
     <div className="bz-list bz-stack">
-      {reviews.map((r, i) => {
-        const {
-          rname,
-          rt,
-          meta,
-          body,
-          htmlBody,
-          attachments,
-          staffReplyHtml,
-          staffReplyPlain,
-          staffRepliedAt,
-        } = reviewFeedRowProps(r);
-        return (
-          <WidgetReviewCard
-            key={r.id ?? i}
-            variant="comfortable"
-            initials={initialsFromName(rname)}
-            name={rname}
-            body={body}
-            htmlBody={htmlBody}
-            attachments={attachments}
-            staffReplyHtml={staffReplyHtml}
-            staffReplyPlain={staffReplyPlain}
-            staffRepliedAt={staffRepliedAt}
-            starRating={rt}
-            scale={scale}
-            meta={meta}
-          />
-        );
-      })}
+      <div className="bz-entry-list-group">
+        {reviews.map((r, i) => {
+          const {
+            rname,
+            avatarUrl,
+            rt,
+            meta,
+            body,
+            htmlBody,
+            attachments,
+            staffReplyHtml,
+            staffReplyPlain,
+            staffRepliedAt,
+          } = reviewFeedRowProps(r);
+          return (
+            <WidgetReviewCard
+              key={r.id ?? i}
+              variant="comfortable"
+              initials={initialsFromName(rname)}
+              avatarUrl={avatarUrl}
+              name={rname}
+              body={body}
+              htmlBody={htmlBody}
+              attachments={attachments}
+              staffReplyHtml={staffReplyHtml}
+              staffReplyPlain={staffReplyPlain}
+              staffRepliedAt={staffRepliedAt}
+              starRating={rt}
+              scale={scale}
+              meta={meta}
+              surface="flat"
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

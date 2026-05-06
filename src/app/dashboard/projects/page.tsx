@@ -1,8 +1,34 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, FolderOpen } from "lucide-react";
+import { ChevronRight, FolderKanban, Plus } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
+
+function updatedLabel(d: Date): string {
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const ms = Date.now() - d.getTime();
+  if (ms < 45_000) return "Just now";
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return rtf.format(-hours, "hour");
+  const days = Math.floor(hours / 24);
+  if (days < 7) return rtf.format(-days, "day");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function allowedDomainCount(raw: unknown): number {
+  if (!Array.isArray(raw)) return 0;
+  return raw.filter((x) => typeof x === "string" && x.trim().length > 0).length;
+}
+
+function moderationLabel(mode: string): string {
+  const m = mode.toLowerCase();
+  if (m === "manual") return "Manual";
+  if (m === "ai") return "AI";
+  return "Auto";
+}
 
 export default async function ProjectsPage() {
   const session = await auth();
@@ -13,81 +39,210 @@ export default async function ProjectsPage() {
   const projects = await prisma.project.findMany({
     where: { ownerId: session.user.id },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, slug: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      updatedAt: true,
+      createdAt: true,
+      widgetMode: true,
+      moderationMode: true,
+      allowedDomains: true,
+      _count: {
+        select: {
+          comments: true,
+          reviews: true,
+          pages: true,
+          apiKeys: { where: { revokedAt: null } },
+        },
+      },
+    },
   });
 
+  const projectIds = projects.map((p) => p.id);
+  let pendingByProject = new Map<string, number>();
+
+  if (projectIds.length > 0) {
+    const [pendingComments, pendingReviews] = await Promise.all([
+      prisma.comment.groupBy({
+        by: ["projectId"],
+        where: { projectId: { in: projectIds }, status: "pending" },
+        _count: { _all: true },
+      }),
+      prisma.review.groupBy({
+        by: ["projectId"],
+        where: { projectId: { in: projectIds }, status: "pending" },
+        _count: { _all: true },
+      }),
+    ]);
+
+    for (const row of pendingComments) {
+      pendingByProject.set(row.projectId, (pendingByProject.get(row.projectId) ?? 0) + row._count._all);
+    }
+    for (const row of pendingReviews) {
+      pendingByProject.set(row.projectId, (pendingByProject.get(row.projectId) ?? 0) + row._count._all);
+    }
+  }
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div className="dash-hero max-w-2xl flex-1 !py-6 sm:!py-7">
+    <div className="space-y-8">
+      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--muted)]">
+        <Link href="/dashboard" className="transition hover:text-[var(--foreground)]">
+          Dashboard
+        </Link>
+        <ChevronRight className="h-4 w-4 shrink-0 opacity-50" strokeWidth={2} aria-hidden />
+        <span className="font-medium text-[var(--foreground)]">Projects</span>
+      </nav>
+
+      <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 max-w-2xl space-y-2">
           <p className="dash-kicker">Workspace</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-[var(--foreground)] md:text-[2.125rem] md:leading-tight">
-            Projects
-          </h1>
-          <p className="mt-3 text-[0.9375rem] leading-relaxed text-[var(--muted)] sm:text-base">
-            Organize embeds by site or product. Every project has its own API keys, domain allowlist, and appearance —
-            tuned to your brand&apos;s gold accent and neutrals.
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)] md:text-3xl">Projects</h1>
+          <p className="text-sm leading-relaxed text-[var(--muted)] md:text-[0.9375rem]">
+            One place per site or product — API keys, domains, widget styling, and moderation.
           </p>
         </div>
-        <Link href="/dashboard/projects/new" className="btn-primary shrink-0 self-start sm:self-auto">
+        <Link
+          href="/dashboard/projects/new"
+          className="btn-primary inline-flex shrink-0 items-center justify-center gap-2 self-start sm:self-center"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
           New project
         </Link>
-      </div>
+      </header>
 
       {projects.length === 0 ? (
-        <div className="card-surface flex flex-col items-center px-8 py-16 text-center">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/15 text-2xl font-bold text-brand ring-1 ring-brand/25 dark:bg-brand/20">
-            +
+        <div className="card-surface p-0">
+          <div className="flex flex-col items-center px-6 py-16 text-center sm:px-10 sm:py-20">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/12 text-brand ring-1 ring-brand/20">
+              <FolderKanban className="h-8 w-8" strokeWidth={1.75} aria-hidden />
+            </div>
+            <h2 className="text-lg font-semibold text-[var(--foreground)] sm:text-xl">Create your first project</h2>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--muted)]">
+              You’ll get API keys, a domain allowlist, and embed appearance controls — then you can drop in comments or
+              reviews on your pages.
+            </p>
+            <Link href="/dashboard/projects/new" className="btn-primary mt-8 inline-flex items-center gap-2">
+              <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+              New project
+            </Link>
           </div>
-          <h2 className="text-xl font-semibold text-[var(--foreground)]">No projects yet</h2>
-          <p className="mt-3 max-w-md text-[0.9375rem] leading-relaxed text-[var(--muted)]">
-            Create your first project to generate API keys, define which domains may load the widget, and customize how
-            the embed looks on your pages.
-          </p>
-          <Link href="/dashboard/projects/new" className="btn-primary mt-8">
-            Create project
-          </Link>
         </div>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {projects.map((p) => (
-            <li key={p.id}>
-              <Link
-                href={`/dashboard/projects/${p.id}`}
-                className="group flex h-full flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 transition duration-200 hover:border-brand/40 hover:shadow-[0_12px_40px_-28px_rgba(15,23,42,0.2)] dark:hover:border-brand/35 dark:hover:shadow-[0_16px_48px_-32px_rgba(0,0,0,0.65)]"
-              >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--muted)] ring-1 ring-[var(--border)] transition group-hover:bg-brand/15 group-hover:text-brand group-hover:ring-brand/25">
-                    <FolderOpen className="h-5 w-5" strokeWidth={2} />
-                  </span>
-                  <ArrowRight
-                    className="h-5 w-5 shrink-0 text-[var(--muted)] opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-brand"
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                </div>
-                <p className="font-semibold text-[var(--foreground)] transition group-hover:text-brand">{p.name}</p>
-                <p className="mt-1 truncate text-sm text-[var(--muted)]">{p.slug}</p>
-                <p className="mt-4 text-xs font-medium text-[var(--muted)]">
-                  Updated{" "}
-                  {p.updatedAt.toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+        <section className="card-surface overflow-hidden p-0" aria-labelledby="projects-heading">
+          <div
+            id="projects-heading"
+            className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-5"
+            style={{ borderColor: "var(--border)", backgroundColor: "var(--surface-muted)" }}
+          >
+            <h2 className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+              Your projects
+            </h2>
+            <p className="tabular-nums text-xs font-medium text-[var(--muted)]">
+              {projects.length} {projects.length === 1 ? "project" : "projects"}
+            </p>
+          </div>
+          <ul role="list" className="divide-y" style={{ borderColor: "var(--border)" }}>
+            {projects.map((p) => {
+              const mode = normalizeWidgetMode(p.widgetMode);
+              const modeMeta = WIDGET_MODE_PREVIEW[mode];
+              const domains = allowedDomainCount(p.allowedDomains);
+              const pending = pendingByProject.get(p.id) ?? 0;
+              const { comments: nComments, reviews: nReviews, pages: nPages, apiKeys: nKeys } = p._count;
 
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-2 text-sm font-medium text-[var(--muted)] transition hover:text-brand"
-      >
-        <span aria-hidden>←</span> Dashboard overview
-      </Link>
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/dashboard/projects/${p.id}`}
+                    className="group flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-[color-mix(in_srgb,var(--surface-muted)_65%,transparent)] sm:gap-4 sm:px-5 sm:py-4"
+                  >
+                    <span
+                      className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[var(--muted)] ring-1 ring-[var(--border)] transition group-hover:bg-brand/12 group-hover:text-brand group-hover:ring-brand/25"
+                      style={{ backgroundColor: "var(--surface-muted)" }}
+                    >
+                      <FolderKanban className="h-[1.15rem] w-[1.15rem]" strokeWidth={2} aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-[var(--foreground)] transition group-hover:text-brand">
+                        {p.name}
+                      </p>
+                      <p className="mt-0.5 truncate font-mono text-xs text-[var(--muted)]">{p.slug}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.7rem] leading-snug text-[var(--muted)] sm:text-xs">
+                        <span
+                          className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-[var(--foreground)] ring-1 ring-[var(--border)]"
+                          style={{ backgroundColor: "var(--surface-muted)" }}
+                        >
+                          {modeMeta.label}
+                        </span>
+                        <span
+                          className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-[var(--muted)] ring-1 ring-[var(--border)]"
+                          style={{ backgroundColor: "var(--surface-muted)" }}
+                          title="Moderation mode"
+                        >
+                          {moderationLabel(p.moderationMode)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="tabular-nums">{nComments}</span>{" "}
+                          {nComments === 1 ? "comment" : "comments"}
+                          <span className="mx-1.5 opacity-40" aria-hidden>
+                            ·
+                          </span>
+                          <span className="tabular-nums">{nReviews}</span> {nReviews === 1 ? "review" : "reviews"}
+                          <span className="mx-1.5 opacity-40" aria-hidden>
+                            ·
+                          </span>
+                          <span className="tabular-nums">{nPages}</span> {nPages === 1 ? "page" : "pages"}
+                          <span className="mx-1.5 opacity-40" aria-hidden>
+                            ·
+                          </span>
+                          <span className="tabular-nums">{nKeys}</span> active {nKeys === 1 ? "key" : "keys"}
+                          <span className="mx-1.5 opacity-40" aria-hidden>
+                            ·
+                          </span>
+                          <span className="tabular-nums">{domains}</span>{" "}
+                          {domains === 1 ? "allowed domain" : "allowed domains"}
+                        </span>
+                        {pending > 0 ? (
+                          <span className="font-medium text-amber-700 dark:text-amber-300">
+                            <span className="tabular-nums">{pending}</span> pending
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1.5 text-[0.65rem] text-[var(--muted)]">
+                        Created{" "}
+                        {p.createdAt.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                        <span className="sm:hidden">
+                          {" "}
+                          · Updated {updatedLabel(p.updatedAt)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="hidden shrink-0 pt-0.5 text-right sm:block">
+                      <p className="text-xs font-medium text-[var(--muted)]">Updated {updatedLabel(p.updatedAt)}</p>
+                      <p className="mt-0.5 text-[0.65rem] tabular-nums text-[var(--muted)] opacity-75">
+                        {p.updatedAt.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className="mt-1 h-5 w-5 shrink-0 self-center text-[var(--muted)] opacity-40 transition group-hover:translate-x-0.5 group-hover:text-brand group-hover:opacity-100"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

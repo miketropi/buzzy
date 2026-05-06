@@ -76,6 +76,7 @@ type BuzzyBootCtx = BuzzyCtx & {
 function readUserProfileFromElement(el: Element): EmbedUserProfile {
   const name = el.getAttribute("data-user-name");
   const email = el.getAttribute("data-user-email");
+  const avatarRaw = el.getAttribute("data-user-avatar");
   const out: EmbedUserProfile = {};
   if (name != null) {
     const t = name.trim();
@@ -84,6 +85,10 @@ function readUserProfileFromElement(el: Element): EmbedUserProfile {
   if (email != null) {
     const t = email.trim();
     if (t) out.email = t;
+  }
+  if (avatarRaw != null) {
+    const t = avatarRaw.trim();
+    if (t && /^https:\/\//i.test(t)) out.avatarUrl = t;
   }
   return out;
 }
@@ -102,8 +107,13 @@ function mergeBootProfile(hostAttrs: EmbedUserProfile, override?: EmbedUserProfi
       if (t) merged.email = t;
       else delete merged.email;
     }
+    if (override.avatarUrl !== undefined) {
+      const t = override.avatarUrl.trim();
+      if (t && /^https:\/\//i.test(t)) merged.avatarUrl = t;
+      else delete merged.avatarUrl;
+    }
   }
-  return merged.name || merged.email ? merged : null;
+  return merged.name || merged.email || merged.avatarUrl ? merged : null;
 }
 
 function applyBootHostIdentity(hostIdentity?: string | null) {

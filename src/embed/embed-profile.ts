@@ -6,6 +6,8 @@
 export type EmbedUserProfile = {
   name?: string;
   email?: string;
+  /** From Host SSO JWT display decode or data-user-avatar — widget UI only */
+  avatarUrl?: string;
 };
 
 export const BUZZY_PROFILE_EVENT = "buzzy:profile";
@@ -26,7 +28,7 @@ function dispatchProfileChanged() {
  * Replaces the stored profile (used when mounting an embed with host attributes / init options).
  */
 export function replaceEmbedProfile(next: EmbedUserProfile | null) {
-  if (!next || (!next.name && !next.email)) {
+  if (!next || (!next.name && !next.email && !next.avatarUrl)) {
     profile = {};
   } else {
     profile = { ...next };
@@ -51,6 +53,11 @@ export function setEmbedProfile(next: EmbedUserProfile | null) {
       const t = next.email.trim();
       if (t) profile.email = t;
       else delete profile.email;
+    }
+    if (next.avatarUrl !== undefined) {
+      const t = next.avatarUrl.trim();
+      if (t) profile.avatarUrl = t;
+      else delete profile.avatarUrl;
     }
   }
   dispatchProfileChanged();

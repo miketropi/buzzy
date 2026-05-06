@@ -16,8 +16,9 @@ export type WidgetChromeTokenInput = {
   composerTextScale: ComposerTextScale;
 };
 
+/** Apple-first stack so buzzy.js reads native on iOS/macOS Safari. */
 const HOST_FONT_STACK =
-  'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  '"SF Pro Text", "SF Pro Display", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 export function resolveWidgetChromeDark(theme: string, prefersDarkMedia: boolean): boolean {
   if (theme === "dark") return true;
@@ -56,7 +57,7 @@ export function widgetConfigToTokenInput(
   const isDark = resolveWidgetChromeDark(theme, prefersDarkMedia);
   return {
     primaryColor: typeof cfg.primary_color === "string" ? cfg.primary_color : "#f5db8d",
-    borderRadius: typeof cfg.border_radius === "string" ? cfg.border_radius : "8px",
+    borderRadius: typeof cfg.border_radius === "string" ? cfg.border_radius : "11px",
     fontFamily: cfg.font_family ?? null,
     useHostTypography: Boolean(cfg.use_host_typography),
     isDark,
@@ -140,19 +141,30 @@ function buildTextScaleRules(scopedRoot: string, scale: ComposerTextScale): stri
  */
 export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTokenInput): string {
   const primary = cssEscapeUrl(p.primaryColor.trim() || "#f5db8d");
-  const radius = cssEscapeUrl(p.borderRadius.trim() || "8px");
+  const radius = cssEscapeUrl(p.borderRadius.trim() || "11px");
   const font = p.useHostTypography
     ? "inherit"
     : cssEscapeUrl((p.fontFamily || HOST_FONT_STACK).trim());
-  const bg = p.isDark ? "#101210" : "#fafbf9";
-  const fg = p.isDark ? "#e8ebe5" : "#111411";
-  const muted = p.isDark ? "#8b9288" : "#5a6255";
-  const border = p.isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.09)";
-  const borderSoft = p.isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
-  const panel = p.isDark ? "#161916" : "#ffffff";
-  const inputBg = p.isDark ? "#0d0f0c" : "#fafaf8";
+  /* Semantic neutrals tuned like iOS system grouped backgrounds & separators */
+  const bg = p.isDark ? "#1c1c1e" : "#f2f2f7";
+  const fg = p.isDark ? "#f2f2f7" : "#1d1d1f";
+  const muted = p.isDark ? "#8e8e93" : "#6e6e73";
+  const border = p.isDark ? "rgba(255,255,255,0.22)" : "rgba(60,60,67,0.29)";
+  const borderSoft = p.isDark ? "rgba(255,255,255,0.08)" : "rgba(60,60,67,0.14)";
+  const panel = p.isDark ? "#2c2c2e" : "#ffffff";
+  const inputBg = p.isDark ? "#2c2c2e" : "#ffffff";
   const tint = primaryColorTint(primary);
   const focusRing = `color-mix(in srgb, ${primary} 48%, transparent)`;
+
+  /** Hairline + float shadows (theme-aware; structural CSS composes layers). */
+  const elevOutline =
+    "0 0 0 0.5px color-mix(in srgb, var(--bz-border-soft) 76%, transparent)";
+  const elevFloat = p.isDark
+    ? "0 8px 32px rgba(0,0,0,0.48)"
+    : "0 4px 18px color-mix(in srgb, var(--bz-fg) 3.4%, transparent)";
+  const elevFloatSm = p.isDark
+    ? "0 3px 16px rgba(0,0,0,0.34)"
+    : "0 2px 10px color-mix(in srgb, var(--bz-fg) 2.5%, transparent)";
 
   const btnMod = p.submitButtonStyle;
   const textMod = p.composerTextScale;
@@ -161,6 +173,14 @@ export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTok
   const variables = `${selector} {
   --bz-p: ${primary};
   --bz-r: ${radius};
+  --bz-shell-r: clamp(14px, calc(var(--bz-r) * 1.75), 26px);
+  --bz-control-r: clamp(10px, calc(var(--bz-r) * 1.2), 17px);
+  --bz-card-r: clamp(12px, calc(var(--bz-r) * 1.28), 20px);
+  --bz-sheet-r-m: clamp(14px, calc(var(--bz-r) * 1.5), 22px);
+  --bz-ios-separator: color-mix(in srgb, var(--bz-border) 30%, transparent);
+  --bz-elev-outline: ${elevOutline};
+  --bz-elev-float: ${elevFloat};
+  --bz-elev-float-sm: ${elevFloatSm};
   --bz-bg: ${bg};
   --bz-fg: ${fg};
   --bz-muted: ${muted};
@@ -171,6 +191,8 @@ export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTok
   --bz-btn-fg: #14110a;
   --bz-tint: ${tint};
   --bz-focus-ring: ${focusRing};
+  --bz-ring: ${focusRing};
+  --bz-link: ${primary};
   font-family: ${font};
 }
 `;

@@ -8,7 +8,9 @@ import { WidgetReviewFeed, type ReviewFeedItem } from "./bz-review-card";
 import { normalizeEntryLayout } from "./entry-layout";
 import { BzAttachmentsPanel } from "./bz-attachments-panel";
 import { BzCommentEditor, type BzCommentEditorRef } from "./bz-comment-editor";
+import { BzComposerSsoSummary } from "./bz-composer-sso-summary";
 import { BzComposerModal } from "./bz-composer-modal";
+import { BzModalIntro } from "./bz-modal-intro";
 import { BzIconChevronLeft, BzIconChevronRight } from "./bz-modal-nav-icons";
 import type { EmbedAttachment } from "./attachment-types";
 import {
@@ -16,6 +18,7 @@ import {
   shouldSendRichHtml,
   strippedFromHtml,
 } from "./rich-composer-helpers";
+import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 
 type Features = {
   enable_rich_editor?: boolean;
@@ -49,6 +52,8 @@ export function EmbedReviewsApp({
   const [err, setErr] = useState("");
   const [name, setName] = useState(() => getEmbedProfile().name ?? "");
   const [email, setEmail] = useState(() => getEmbedProfile().email ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(() => getEmbedProfile().avatarUrl ?? "");
+  const hostSsoProvisioned = useHostIdentityProvisioned();
   const [plainNote, setPlainNote] = useState("");
   const [rating, setRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +102,7 @@ export function EmbedReviewsApp({
       const p = getEmbedProfile();
       setName(p.name ?? "");
       setEmail(p.email ?? "");
+      setAvatarUrl(p.avatarUrl ?? "");
     };
     sync();
     globalThis.addEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
@@ -130,7 +136,7 @@ export function EmbedReviewsApp({
 
   const goReviewStep2 = useCallback(() => {
     setErr("");
-    if (!name.trim()) {
+    if (!hostSsoProvisioned && !name.trim()) {
       setErr("Please enter your name.");
       return;
     }
@@ -143,22 +149,28 @@ export function EmbedReviewsApp({
       setRichDraftHtml(html);
     }
     setComposerStep(1);
-  }, [name, rating, enableRich]);
+  }, [name, rating, enableRich, hostSsoProvisioned]);
 
   function submitReview() {
     setErr("");
-    if (!rating || !name.trim()) {
-      setErr("Please go back and enter your name and rating.");
+    if (!rating) {
+      setErr("Please choose a star rating.");
+      return;
+    }
+    if (!hostSsoProvisioned && !name.trim()) {
+      setErr("Please go back and enter your name.");
       return;
     }
     setSubmitting(true);
+
+    const postName = (name.trim() || "Community member").slice(0, 120);
 
     const body: Record<string, unknown> = {
       page_url: ctx.pageUrl,
       page_title: ctx.pageTitle,
       rating,
       commenter: {
-        name: name.trim(),
+        name: postName,
         email: email.trim(),
       },
     };
@@ -256,7 +268,7 @@ export function EmbedReviewsApp({
   return (
     <div className="bz-main-stack">
       {showSummary && !ratingOnly ? (
-        <div className="bz-panel">
+        <div className="bz-embed-section">
           <p className="bz-head">Reviews</p>
           <div className="bz-sum bz-sum-head">
             <span className="bz-big">{avg.toFixed(1)}</span>
@@ -269,7 +281,7 @@ export function EmbedReviewsApp({
       ) : null}
 
       {showSummary && ratingOnly ? (
-        <div className="bz-panel bz-panel--sm">
+        <div className="bz-embed-section">
           <div className="bz-flex-between">
             <div>
               <p className="bz-head">Average rating</p>
@@ -285,7 +297,7 @@ export function EmbedReviewsApp({
         </div>
       ) : null}
 
-      <div className="bz-panel">
+      <div className="bz-embed-section">
         <p className="bz-head">{heading}</p>
         <div className="bz-thread-entries">
           {reviews.length ? (
@@ -363,38 +375,48 @@ export function EmbedReviewsApp({
           {err && composerOpen ? <p className="bz-msg">{err}</p> : null}
           {composerStep === 0 ? (
             <>
-              <p className="bz-modal-intro">
-                {ratingOnly
-                  ? "Introduce yourself and tap the stars — then add an optional note. You can attach screenshots or files in the next step if that tells the story better."
-                  : "Share who you are, rate your experience, and write what stood out. Photos or docs are optional and come next — focus on your words first."}
-              </p>
-              <div className="bz-form-field">
-                <label className="bz-l" htmlFor="buzzy-r-name">
-                  Your name
-                </label>
-                <input
-                  id="buzzy-r-name"
-                  className="bz-in"
-                  name="name"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="bz-form-field">
-                <label className="bz-l" htmlFor="buzzy-r-email">
-                  Email (optional)
-                </label>
-                <input
-                  id="buzzy-r-email"
-                  className="bz-in"
-                  type="email"
-                  name="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+              <BzModalIntro>
+                {hostSsoProvisioned
+                  ? ratingOnly
+                    ? "You're signed in below — tap the stars, add an optional note, then continue. Files are in the next step."
+                    : "You're signed in below — rate your experience and share what stood out. Optional files are in the next step."
+                  : ratingOnly
+                    ? "Introduce yourself and tap the stars — then add an optional note. You can attach screenshots or files in the next step if that tells the story better."
+                    : "Share who you are, rate your experience, and write what stood out. Photos or docs are optional and come next — focus on your words first."}
+              </BzModalIntro>
+              {hostSsoProvisioned ? (
+                <BzComposerSsoSummary name={name.trim()} email={email.trim()} avatarUrl={avatarUrl.trim() || undefined} />
+              ) : (
+                <>
+                  <div className="bz-form-field">
+                    <label className="bz-l" htmlFor="buzzy-r-name">
+                      Your name
+                    </label>
+                    <input
+                      id="buzzy-r-name"
+                      className="bz-in"
+                      name="name"
+                      autoComplete="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div className="bz-form-field">
+                    <label className="bz-l" htmlFor="buzzy-r-email">
+                      Email (optional)
+                    </label>
+                    <input
+                      id="buzzy-r-email"
+                      className="bz-in"
+                      type="email"
+                      name="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
               <div className="bz-form-field bz-form-field--rating">
                 <label className="bz-l" htmlFor="buzzy-r-stars">
                   Your rating
@@ -442,9 +464,9 @@ export function EmbedReviewsApp({
             </>
           ) : (
             <>
-              <p className="bz-modal-intro">
+              <BzModalIntro>
                 Add visuals or documents here, or skip entirely — your rating and note from step 1 are enough to submit.
-              </p>
+              </BzModalIntro>
               <div className="bz-form-field">
                 <label className="bz-l" htmlFor="buzzy-r-attachments">
                   Attachments
