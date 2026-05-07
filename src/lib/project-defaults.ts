@@ -10,6 +10,10 @@ export function defaultProjectSettings() {
     submitButtonStyle: "filled" as string,
     /** Base UI scale for composer labels, inputs, and body copy in the widget. */
     composerTextScale: "md" as string,
+    /** Optional #rgb / #RRGGBB for primary submit label — null picks contrast vs accent automatically. */
+    submitButtonFgColor: null as string | null,
+    /** Optional muted/secondary label color (#rgb / #RRGGBB); null keeps theme neutrals. */
+    mutedTextColor: null as string | null,
     fontFamily: '"Hanken Grotesk", system-ui, sans-serif',
     useHostTypography: false,
     widgetMode: "comment",

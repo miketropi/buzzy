@@ -19,7 +19,6 @@ export async function GET() {
         name: true,
         slug: true,
         widgetMode: true,
-        moderationMode: true,
         allowedDomains: true,
         createdAt: true,
         updatedAt: true,
@@ -48,7 +47,6 @@ export async function POST(request: Request) {
           ownerId,
           allowedDomains: body.allowedDomains as Prisma.InputJsonValue,
           widgetMode: body.widgetMode ?? "comment",
-          moderationMode: body.moderationMode ?? "auto",
           settings: defaultProjectSettings() as Prisma.InputJsonValue,
         },
       });

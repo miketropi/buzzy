@@ -17,13 +17,14 @@ type InitialAppearance = {
   useHostTypography: boolean;
   submitButtonStyle: string;
   composerTextScale: string;
+  submitButtonFgColor: string | null;
+  mutedTextColor: string | null;
 };
 
 export function SettingsAndAppearanceClient({
   projectId,
   initialName,
   initialWidgetMode,
-  initialModerationMode,
   initialDomainsText,
   initialAutoApprove,
   initialEnableAttachments,
@@ -33,7 +34,6 @@ export function SettingsAndAppearanceClient({
   projectId: string;
   initialName: string;
   initialWidgetMode: string;
-  initialModerationMode: string;
   initialDomainsText: string;
   initialAutoApprove: boolean;
   initialEnableAttachments: boolean;
@@ -67,6 +67,8 @@ export function SettingsAndAppearanceClient({
         initialUseHostTypography={appearance.useHostTypography}
         initialSubmitButtonStyle={appearance.submitButtonStyle}
         initialComposerTextScale={appearance.composerTextScale}
+        initialSubmitButtonFgColor={appearance.submitButtonFgColor}
+        initialMutedTextColor={appearance.mutedTextColor}
         slots={({ optionsPanel, previewPanel }) => (
           <div className="dash-panel overflow-hidden">
             <div className="lg:grid lg:grid-cols-[minmax(300px,44%)_1fr]">
@@ -84,7 +86,7 @@ export function SettingsAndAppearanceClient({
                         Behavior & access
                       </h2>
                       <p className="mt-1 text-sm leading-snug text-[var(--muted)]">
-                        Project name, widget mode, moderation, guests, uploads, approval, and allowed domains
+                        Project name, widget mode, guests, uploads, approval, and allowed domains
                       </p>
                     </div>
                   </div>
@@ -92,7 +94,6 @@ export function SettingsAndAppearanceClient({
                     projectId={projectId}
                     initialName={initialName}
                     initialWidgetMode={initialWidgetMode}
-                    initialModerationMode={initialModerationMode}
                     initialDomainsText={initialDomainsText}
                     initialAutoApprove={initialAutoApprove}
                     initialEnableAttachments={initialEnableAttachments}

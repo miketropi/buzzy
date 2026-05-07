@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { contrastingForeground, normalizeHexRgb } from "@/lib/contrast-color";
 import { COLOR_PRESETS, ENTRY_LAYOUTS, type ColorPresetId, presetPrimary } from "@/lib/appearance-presets";
 import type { ComposerTextScale, SubmitButtonStyle } from "@/lib/widget-chrome-tokens";
 import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
@@ -67,6 +68,8 @@ export function ProjectAppearanceForm({
   initialUseHostTypography,
   initialSubmitButtonStyle,
   initialComposerTextScale,
+  initialSubmitButtonFgColor,
+  initialMutedTextColor,
   slots,
 }: {
   projectId: string;
@@ -80,6 +83,8 @@ export function ProjectAppearanceForm({
   initialUseHostTypography: boolean;
   initialSubmitButtonStyle: string;
   initialComposerTextScale: string;
+  initialSubmitButtonFgColor: string | null;
+  initialMutedTextColor: string | null;
   /** Compose options + preview inside a parent layout (e.g. unified settings + sticky preview column). */
   slots?: (parts: { optionsPanel: ReactNode; previewPanel: ReactNode }) => ReactNode;
 }) {
@@ -107,11 +112,34 @@ export function ProjectAppearanceForm({
       ? (initialComposerTextScale as ComposerTextScale)
       : "md",
   );
+  function coerceStoredHex(input: string | null | undefined): string | null {
+    if (!input || typeof input !== "string") return null;
+    return normalizeHexRgb(input.trim());
+  }
+  const [submitButtonFgDraft, setSubmitButtonFgDraft] = useState(() => coerceStoredHex(initialSubmitButtonFgColor) ?? "");
+  const [mutedTextDraft, setMutedTextDraft] = useState(() => coerceStoredHex(initialMutedTextColor) ?? "");
+
+  const previewSubmitFgHex = useMemo((): string | null => {
+    const t = submitButtonFgDraft.trim();
+    if (!t) return null;
+    return normalizeHexRgb(t);
+  }, [submitButtonFgDraft]);
+
+  const previewMutedHex = useMemo((): string | null => {
+    const t = mutedTextDraft.trim();
+    if (!t) return null;
+    return normalizeHexRgb(t);
+  }, [mutedTextDraft]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const presetList = useMemo(() => COLOR_PRESETS.filter((p) => p.id !== "custom"), []);
+  const suggestedSubmitLabelFg = useMemo(() => contrastingForeground(primaryColor), [primaryColor]);
+  const themeDefaultMutedHex = useMemo(
+    () => (theme === "dark" ? "#8e8e93" : "#6e6e73"),
+    [theme],
+  );
 
   function applyColorPreset(id: ColorPresetId) {
     setColorPreset(id);
@@ -126,6 +154,21 @@ export function ProjectAppearanceForm({
     setMessage(null);
     setLoading(true);
     try {
+      const trimmedSubmit = submitButtonFgDraft.trim();
+      const trimmedMuted = mutedTextDraft.trim();
+      const submitNorm = trimmedSubmit === "" ? null : normalizeHexRgb(trimmedSubmit);
+      const mutedNorm = trimmedMuted === "" ? null : normalizeHexRgb(trimmedMuted);
+      if (trimmedSubmit && !submitNorm) {
+        setError('Primary action label: use hex like #f00 or #ff0044, or leave blank for automatic contrast.');
+        setLoading(false);
+        return;
+      }
+      if (trimmedMuted && !mutedNorm) {
+        setError('Secondary & helper text: use hex like #f00 or #ff0044, or leave blank for the theme default.');
+        setLoading(false);
+        return;
+      }
+
       const res = await fetch(`/api/internal/projects/${projectId}/settings`, {
         method: "PATCH",
         credentials: "include",
@@ -140,6 +183,8 @@ export function ProjectAppearanceForm({
           useHostTypography,
           submitButtonStyle,
           composerTextScale,
+          submitButtonFgColor: submitNorm,
+          mutedTextColor: mutedNorm,
         }),
       });
       const json = (await res.json()) as { success: boolean; error?: { message?: string } };
@@ -385,6 +430,132 @@ export function ProjectAppearanceForm({
             })}
           </div>
         </div>
+
+        <div className="rounded-lg border border-slate-200/90 bg-white/70 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/30">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-zinc-400">
+            Fine-tune colors (optional)
+          </p>
+          <p className="mb-3 text-xs leading-relaxed text-slate-500 dark:text-zinc-500">
+            Solid buttons now pick a readable label color from your accent automatically. Use these fields only when you
+            need a specific label on primary actions (all three button styles) or a custom tone for secondary / helper
+            text across the composer and list.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-medium text-slate-600 dark:text-zinc-400">Primary action label</p>
+              {submitButtonFgDraft.trim() ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    id="submitButtonFgColorPicker"
+                    aria-label="Primary action button label color"
+                    value={previewSubmitFgHex ?? suggestedSubmitLabelFg}
+                    onChange={(e) => setSubmitButtonFgDraft(normalizeHexRgb(e.target.value) ?? e.target.value)}
+                    className="h-9 w-[4.75rem] cursor-pointer overflow-hidden rounded-md border border-slate-300 bg-white p-0 dark:border-zinc-600 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-[5px]"
+                  />
+                  <code className="font-mono text-xs text-slate-600 dark:text-zinc-400">
+                    {(previewSubmitFgHex ?? "").toLowerCase() || suggestedSubmitLabelFg}
+                  </code>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    onClick={() => setSubmitButtonFgDraft(suggestedSubmitLabelFg)}
+                  >
+                    Match suggested
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-slate-500 underline decoration-slate-400/80 underline-offset-2 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+                    onClick={() => setSubmitButtonFgDraft("")}
+                  >
+                    Automatic
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className="h-9 w-9 shrink-0 rounded-md border border-slate-300 dark:border-zinc-600"
+                    style={{ backgroundColor: suggestedSubmitLabelFg }}
+                    aria-hidden
+                  />
+                  <span className="max-w-[20rem] text-sm text-slate-600 dark:text-zinc-400">
+                    Uses automatic contrast for your accent (currently ~{" "}
+                    <code className="font-mono text-xs text-slate-800 dark:text-zinc-200">
+                      {suggestedSubmitLabelFg}
+                    </code>
+                    ).
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    onClick={() => setSubmitButtonFgDraft(suggestedSubmitLabelFg)}
+                  >
+                    Choose color…
+                  </button>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium text-slate-600 dark:text-zinc-400">Secondary &amp; helper text</p>
+              {mutedTextDraft.trim() ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    id="mutedTextColorPicker"
+                    aria-label="Secondary and helper text color"
+                    value={previewMutedHex ?? themeDefaultMutedHex}
+                    onChange={(e) => setMutedTextDraft(normalizeHexRgb(e.target.value) ?? e.target.value)}
+                    className="h-9 w-[4.75rem] cursor-pointer overflow-hidden rounded-md border border-slate-300 bg-white p-0 dark:border-zinc-600 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-[5px]"
+                  />
+                  <code className="font-mono text-xs text-slate-600 dark:text-zinc-400">
+                    {(previewMutedHex ?? "").toLowerCase() || themeDefaultMutedHex}
+                  </code>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    onClick={() => setMutedTextDraft(themeDefaultMutedHex)}
+                  >
+                    Match theme default
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-slate-500 underline decoration-slate-400/80 underline-offset-2 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+                    onClick={() => setMutedTextDraft("")}
+                  >
+                    Theme default (auto)
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className="h-9 w-9 shrink-0 rounded-md border border-slate-300 dark:border-zinc-600"
+                    style={{ backgroundColor: themeDefaultMutedHex }}
+                    aria-hidden
+                  />
+                  <span className="max-w-[20rem] text-sm text-slate-600 dark:text-zinc-400">
+                    Uses built‑in muted gray for this appearance (
+                    <code className="font-mono text-xs text-slate-800 dark:text-zinc-200">
+                      {themeDefaultMutedHex}
+                    </code>
+                    {theme === "auto" ? " — for “system” themes the widget still picks light vs dark at runtime." : ""}
+                    ).
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    onClick={() => setMutedTextDraft(themeDefaultMutedHex)}
+                  >
+                    Choose color…
+                  </button>
+                </div>
+              )}
+              <p className="mt-2 text-[0.7rem] leading-snug text-slate-500 dark:text-zinc-500">
+                Overrides labels and hints that use muted styling. Automatic uses the preset for your theme mode choice
+                above.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-2.5">
@@ -445,6 +616,8 @@ export function ProjectAppearanceForm({
       useHostTypography={useHostTypography}
       submitButtonStyle={submitButtonStyle}
       composerTextScale={composerTextScale}
+      submitButtonFgColor={previewSubmitFgHex}
+      mutedTextColor={previewMutedHex}
       entryLayout={entryLayout}
     />
   );

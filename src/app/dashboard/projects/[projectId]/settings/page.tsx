@@ -1,11 +1,18 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { COLOR_PRESETS, type ColorPresetId } from "@/lib/appearance-presets";
+import { normalizeHexRgb } from "@/lib/contrast-color";
 import { domainsFromJson } from "@/lib/json-domains";
 import { prisma } from "@/lib/prisma";
 import { defaultProjectSettings } from "@/lib/project-defaults";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { SettingsAndAppearanceClient } from "./settings-and-appearance-client";
+
+function storedHex(raw: Record<string, unknown>, key: string): string | null {
+  const v = raw[key];
+  if (typeof v !== "string") return null;
+  return normalizeHexRgb(v.trim());
+}
 
 function inferPresetFromPrimary(hex: string): ColorPresetId {
   const norm = hex.trim().toLowerCase();
@@ -31,7 +38,6 @@ export default async function ProjectSettingsPage({
       id: true,
       name: true,
       widgetMode: true,
-      moderationMode: true,
       allowedDomains: true,
       settings: true,
     },
@@ -85,12 +91,14 @@ export default async function ProjectSettingsPage({
     ? rawTextScale
     : defs.composerTextScale;
 
+  const initialSubmitButtonFgColor = storedHex(raw, "submitButtonFgColor") ?? null;
+  const initialMutedTextColor = storedHex(raw, "mutedTextColor") ?? null;
+
   return (
     <SettingsAndAppearanceClient
       projectId={project.id}
       initialName={project.name}
       initialWidgetMode={normalizeWidgetMode(project.widgetMode)}
-      initialModerationMode={project.moderationMode}
       initialDomainsText={domainsText}
       initialAutoApprove={initialAutoApprove}
       initialEnableAttachments={initialEnableAttachments}
@@ -105,6 +113,8 @@ export default async function ProjectSettingsPage({
         useHostTypography: bool("useHostTypography", defs.useHostTypography),
         submitButtonStyle: initialSubmitButtonStyle,
         composerTextScale: initialComposerTextScale,
+        submitButtonFgColor: initialSubmitButtonFgColor,
+        mutedTextColor: initialMutedTextColor,
       }}
     />
   );

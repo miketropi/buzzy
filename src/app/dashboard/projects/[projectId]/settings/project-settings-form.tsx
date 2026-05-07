@@ -5,13 +5,11 @@ import { useState } from "react";
 import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
 
 const widgetModes = ["comment", "review", "rating"] as const;
-const moderationModes = ["auto", "manual", "ai"] as const;
 
 export function ProjectSettingsForm({
   projectId,
   initialName,
   initialWidgetMode,
-  initialModerationMode,
   initialDomainsText,
   initialAutoApprove,
   initialEnableAttachments,
@@ -23,7 +21,6 @@ export function ProjectSettingsForm({
   projectId: string;
   initialName: string;
   initialWidgetMode: string;
-  initialModerationMode: string;
   initialDomainsText: string;
   /** When true, new submissions are published without manual review (`requireApproval` false). */
   initialAutoApprove: boolean;
@@ -45,7 +42,6 @@ export function ProjectSettingsForm({
       setInternalWidgetMode(v);
     }
   }
-  const [moderationMode, setModerationMode] = useState(initialModerationMode);
   const [domainsText, setDomainsText] = useState(initialDomainsText);
   const [autoApprove, setAutoApprove] = useState(initialAutoApprove);
   const [enableAttachments, setEnableAttachments] = useState(initialEnableAttachments);
@@ -69,7 +65,7 @@ export function ProjectSettingsForm({
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, widgetMode, moderationMode }),
+        body: JSON.stringify({ name, widgetMode }),
       });
       const jsonProject = (await resProject.json()) as {
         success: boolean;
@@ -154,47 +150,25 @@ export function ProjectSettingsForm({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-        <div>
-          <label htmlFor="widgetMode" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Widget mode
-          </label>
-          <select
-            id="widgetMode"
-            value={widgetMode}
-            onChange={(e) => setWidgetMode(e.target.value)}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-          >
-            {widgetModes.map((m) => (
-              <option key={m} value={m}>
-                {WIDGET_MODE_PREVIEW[normalizeWidgetMode(m)].label} ({m})
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-zinc-500 sm:text-sm">
-            {WIDGET_MODE_PREVIEW[normalizeWidgetMode(widgetMode)].description}
-          </p>
-        </div>
-        <div>
-          <label
-            htmlFor="moderationMode"
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-          >
-            Moderation
-          </label>
-          <select
-            id="moderationMode"
-            value={moderationMode}
-            onChange={(e) => setModerationMode(e.target.value)}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-          >
-            {moderationModes.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div>
+        <label htmlFor="widgetMode" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Widget mode
+        </label>
+        <select
+          id="widgetMode"
+          value={widgetMode}
+          onChange={(e) => setWidgetMode(e.target.value)}
+          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
+        >
+          {widgetModes.map((m) => (
+            <option key={m} value={m}>
+              {WIDGET_MODE_PREVIEW[normalizeWidgetMode(m)].label} ({m})
+            </option>
+          ))}
+        </select>
+        <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-zinc-500 sm:text-sm">
+          {WIDGET_MODE_PREVIEW[normalizeWidgetMode(widgetMode)].description}
+        </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-200/90 bg-slate-50/60 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/40">

@@ -3,6 +3,8 @@
  * variable block so appearance settings match the live Shadow DOM widget.
  */
 
+import { contrastingForeground, normalizeHexRgb } from "@/lib/contrast-color";
+
 export type SubmitButtonStyle = "filled" | "outline" | "soft";
 export type ComposerTextScale = "sm" | "md" | "lg";
 
@@ -14,6 +16,10 @@ export type WidgetChromeTokenInput = {
   isDark: boolean;
   submitButtonStyle: SubmitButtonStyle;
   composerTextScale: ComposerTextScale;
+  /** Custom label color on primary CTA (.bz-btn:not(.bz-btn--secondary)); null → auto contrast on filled / style defaults elsewhere. */
+  submitButtonFgColor: string | null;
+  /** Custom secondary/muted copy color; null → theme default. */
+  mutedTextColor: string | null;
 };
 
 /** Apple-first stack so buzzy.js reads native on iOS/macOS Safari. */
@@ -40,6 +46,11 @@ function normalizeComposerTextScale(v: string | undefined): ComposerTextScale {
   return v === "sm" || v === "lg" ? v : "md";
 }
 
+function parseOptionalFg(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  return normalizeHexRgb(v.trim());
+}
+
 /** Map API config (GET /api/v1/config `data`) to token input. */
 export function widgetConfigToTokenInput(
   cfg: {
@@ -50,6 +61,8 @@ export function widgetConfigToTokenInput(
     use_host_typography?: boolean;
     submit_button_style?: string;
     composer_text_scale?: string;
+    submit_button_fg_color?: string | null;
+    muted_text_color?: string | null;
   },
   prefersDarkMedia: boolean,
 ): WidgetChromeTokenInput {
@@ -63,6 +76,9 @@ export function widgetConfigToTokenInput(
     isDark,
     submitButtonStyle: normalizeSubmitButtonStyle(cfg.submit_button_style),
     composerTextScale: normalizeComposerTextScale(cfg.composer_text_scale),
+    submitButtonFgColor:
+      cfg.submit_button_fg_color != null ? parseOptionalFg(cfg.submit_button_fg_color) : null,
+    mutedTextColor: cfg.muted_text_color != null ? parseOptionalFg(cfg.muted_text_color) : null,
   };
 }
 
@@ -75,6 +91,8 @@ export function dashboardToTokenInput(
   prefersDarkMedia: boolean,
   submitButtonStyle: SubmitButtonStyle = "filled",
   composerTextScale: ComposerTextScale = "md",
+  submitButtonFgColor: string | null = null,
+  mutedTextColor: string | null = null,
 ): WidgetChromeTokenInput {
   const isDark = resolveWidgetChromeDark(theme, prefersDarkMedia);
   return {
@@ -85,6 +103,9 @@ export function dashboardToTokenInput(
     isDark,
     submitButtonStyle: normalizeSubmitButtonStyle(submitButtonStyle),
     composerTextScale: normalizeComposerTextScale(composerTextScale),
+    submitButtonFgColor:
+      typeof submitButtonFgColor === "string" ? normalizeHexRgb(submitButtonFgColor.trim()) : null,
+    mutedTextColor: typeof mutedTextColor === "string" ? normalizeHexRgb(mutedTextColor.trim()) : null,
   };
 }
 
@@ -95,13 +116,17 @@ function cssEscapeUrl(s: string): string {
 function buildPrimaryButtonOverrideRules(
   scopedRoot: string,
   style: SubmitButtonStyle,
+  submitFgCustomLiteral: string | null,
 ): string {
   if (style === "filled") return "";
   const primary = ".bz-btn:not(.bz-btn--secondary)";
+  const colorLine =
+    submitFgCustomLiteral != null ? `color: ${submitFgCustomLiteral} !important;` : null;
   if (style === "outline") {
+    const colorDecl = colorLine ?? "color: var(--bz-p);";
     return `${scopedRoot} ${primary} {
   background: transparent !important;
-  color: var(--bz-p);
+  ${colorDecl}
   border: 1.5px solid var(--bz-p);
   box-shadow: none !important;
   filter: none;
@@ -113,9 +138,10 @@ ${scopedRoot} ${primary}:hover:not(:disabled) {
 `;
   }
   /* soft */
+  const colorDecl = colorLine ?? "color: var(--bz-fg);";
   return `${scopedRoot} ${primary} {
   background: color-mix(in srgb, var(--bz-p) 24%, var(--bz-panel)) !important;
-  color: var(--bz-fg);
+  ${colorDecl}
   border: 1px solid color-mix(in srgb, var(--bz-p) 38%, var(--bz-border));
   box-shadow: none !important;
   filter: none;
@@ -148,13 +174,19 @@ export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTok
   /* Semantic neutrals tuned like iOS system grouped backgrounds & separators */
   const bg = p.isDark ? "#1c1c1e" : "#f2f2f7";
   const fg = p.isDark ? "#f2f2f7" : "#1d1d1f";
-  const muted = p.isDark ? "#8e8e93" : "#6e6e73";
+  const mutedDefault = p.isDark ? "#8e8e93" : "#6e6e73";
+  const muted = p.mutedTextColor != null ? p.mutedTextColor : mutedDefault;
+  const mutedCss = cssEscapeUrl(muted);
   const border = p.isDark ? "rgba(255,255,255,0.22)" : "rgba(60,60,67,0.29)";
   const borderSoft = p.isDark ? "rgba(255,255,255,0.08)" : "rgba(60,60,67,0.14)";
   const panel = p.isDark ? "#2c2c2e" : "#ffffff";
   const inputBg = p.isDark ? "#2c2c2e" : "#ffffff";
   const tint = primaryColorTint(primary);
   const focusRing = `color-mix(in srgb, ${primary} 48%, transparent)`;
+  const autoBtnFg = cssEscapeUrl(contrastingForeground(p.primaryColor));
+  const customBtnFg = p.submitButtonFgColor != null ? cssEscapeUrl(p.submitButtonFgColor) : null;
+  const literalBtnFg = customBtnFg ?? autoBtnFg;
+  const literalBtnFgForOutlineSoft = customBtnFg;
 
   /** Hairline + float shadows (theme-aware; structural CSS composes layers). */
   const elevOutline =
@@ -183,12 +215,12 @@ export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTok
   --bz-elev-float-sm: ${elevFloatSm};
   --bz-bg: ${bg};
   --bz-fg: ${fg};
-  --bz-muted: ${muted};
+  --bz-muted: ${mutedCss};
   --bz-border: ${border};
   --bz-border-soft: ${borderSoft};
   --bz-panel: ${panel};
   --bz-input-bg: ${inputBg};
-  --bz-btn-fg: #14110a;
+  --bz-btn-fg: ${literalBtnFg};
   --bz-tint: ${tint};
   --bz-focus-ring: ${focusRing};
   --bz-ring: ${focusRing};
@@ -200,7 +232,7 @@ export function buildWidgetChromeTokenBlock(selector: string, p: WidgetChromeTok
   return (
     variables +
     buildTextScaleRules(scopedWithMods, p.composerTextScale) +
-    buildPrimaryButtonOverrideRules(scopedWithMods, p.submitButtonStyle)
+    buildPrimaryButtonOverrideRules(scopedWithMods, p.submitButtonStyle, literalBtnFgForOutlineSoft)
   );
 }
 

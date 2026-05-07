@@ -58,7 +58,6 @@ model Project {
   /// JSON string[] — widget allowed origins
   allowedDomains Json
   widgetMode     String   @default("comment")
-  moderationMode String   @default("auto")
   /// JSON blob (legacy ProjectSettings shape)
   settings       Json?
   /// HMAC secret for host-signed identity assertions (`X-Buzzy-Host-Identity` on the public API). Shown once when generated.

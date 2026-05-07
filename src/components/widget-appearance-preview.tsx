@@ -71,6 +71,8 @@ export function WidgetAppearancePreview({
   useHostTypography,
   submitButtonStyle,
   composerTextScale,
+  submitButtonFgColor,
+  mutedTextColor,
   entryLayout,
 }: {
   widgetMode: PublicWidgetMode;
@@ -81,6 +83,9 @@ export function WidgetAppearancePreview({
   useHostTypography: boolean;
   submitButtonStyle: SubmitButtonStyle;
   composerTextScale: ComposerTextScale;
+  /** Normalized #RRGGBB or null (auto label on solid fills). */
+  submitButtonFgColor: string | null;
+  mutedTextColor: string | null;
   entryLayout: string;
 }) {
   const layout = (["list", "card_grid", "carousel"].includes(entryLayout) ? entryLayout : "list") as EntryLayout;
@@ -278,6 +283,8 @@ export function WidgetAppearancePreview({
           prefersDark,
           submitButtonStyle,
           composerTextScale,
+          submitButtonFgColor,
+          mutedTextColor,
         ),
         WIDGET_CHROME_STRUCTURAL_SCOPED,
       ),
@@ -290,6 +297,8 @@ export function WidgetAppearancePreview({
       prefersDark,
       submitButtonStyle,
       composerTextScale,
+      submitButtonFgColor,
+      mutedTextColor,
     ],
   );
 

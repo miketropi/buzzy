@@ -37,7 +37,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       data.allowedDomains = patch.allowedDomains as Prisma.InputJsonValue;
     }
     if (patch.widgetMode !== undefined) data.widgetMode = patch.widgetMode;
-    if (patch.moderationMode !== undefined) data.moderationMode = patch.moderationMode;
     const project = await prisma.project.update({
       where: { id: projectId },
       data,

@@ -47,6 +47,8 @@ function applyShell(shadow: ShadowRoot, cfg: Record<string, unknown>) {
       use_host_typography: cfg.use_host_typography as boolean | undefined,
       submit_button_style: cfg.submit_button_style as string | undefined,
       composer_text_scale: cfg.composer_text_scale as string | undefined,
+      submit_button_fg_color: cfg.submit_button_fg_color as string | null | undefined,
+      muted_text_color: cfg.muted_text_color as string | null | undefined,
     },
     prefersDark(),
   );

@@ -1,8 +1,10 @@
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronRight, FolderKanban, Plus } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
 
 function updatedLabel(d: Date): string {
@@ -23,11 +25,20 @@ function allowedDomainCount(raw: unknown): number {
   return raw.filter((x) => typeof x === "string" && x.trim().length > 0).length;
 }
 
-function moderationLabel(mode: string): string {
-  const m = mode.toLowerCase();
-  if (m === "manual") return "Manual";
-  if (m === "ai") return "AI";
-  return "Auto";
+function submissionApprovalLabel(settingsJson: Prisma.JsonValue | null | undefined): {
+  label: string;
+  title: string;
+} {
+  const needApproval = getEffectiveSettings(settingsJson).requireApproval;
+  return needApproval
+    ? {
+        label: "Review",
+        title: "New submissions must be approved before going live.",
+      }
+    : {
+        label: "Instant",
+        title: "New submissions publish immediately.",
+      };
 }
 
 export default async function ProjectsPage() {
@@ -46,7 +57,7 @@ export default async function ProjectsPage() {
       updatedAt: true,
       createdAt: true,
       widgetMode: true,
-      moderationMode: true,
+      settings: true,
       allowedDomains: true,
       _count: {
         select: {
@@ -146,6 +157,7 @@ export default async function ProjectsPage() {
             {projects.map((p) => {
               const mode = normalizeWidgetMode(p.widgetMode);
               const modeMeta = WIDGET_MODE_PREVIEW[mode];
+              const approvalBadge = submissionApprovalLabel(p.settings);
               const domains = allowedDomainCount(p.allowedDomains);
               const pending = pendingByProject.get(p.id) ?? 0;
               const { comments: nComments, reviews: nReviews, pages: nPages, apiKeys: nKeys } = p._count;
@@ -177,9 +189,9 @@ export default async function ProjectsPage() {
                         <span
                           className="shrink-0 rounded-md px-1.5 py-0.5 font-medium text-[var(--muted)] ring-1 ring-[var(--border)]"
                           style={{ backgroundColor: "var(--surface-muted)" }}
-                          title="Moderation mode"
+                          title={approvalBadge.title}
                         >
-                          {moderationLabel(p.moderationMode)}
+                          {approvalBadge.label}
                         </span>
                         <span className="min-w-0">
                           <span className="tabular-nums">{nComments}</span>{" "}

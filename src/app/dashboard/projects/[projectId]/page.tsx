@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { domainsFromJson } from "@/lib/json-domains";
 import { prisma } from "@/lib/prisma";
+import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { DeleteProjectButton } from "./delete-project-button";
 
@@ -22,7 +23,7 @@ export default async function ProjectOverviewPage({
       name: true,
       slug: true,
       widgetMode: true,
-      moderationMode: true,
+      settings: true,
       allowedDomains: true,
       createdAt: true,
     },
@@ -33,6 +34,7 @@ export default async function ProjectOverviewPage({
   }
 
   const allowedDomains = domainsFromJson(project.allowedDomains);
+  const { requireApproval } = getEffectiveSettings(project.settings);
 
   return (
     <div className="space-y-8">
@@ -50,13 +52,14 @@ export default async function ProjectOverviewPage({
         </div>
         <div className="card-surface p-5">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Moderation
+            Submission approval
           </h2>
-          <p className="mt-2 font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
-            {project.moderationMode}
+          <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+            {requireApproval ? "Approve before publishing" : "Publish immediately"}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-500">
-            Auto-approved content or manual review before it appears on your pages.
+            Controlled by “Automatic approval” in Settings — when off, new comments and reviews stay pending until you
+            approve them.
           </p>
         </div>
       </div>

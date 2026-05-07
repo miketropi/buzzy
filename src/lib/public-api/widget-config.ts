@@ -16,8 +16,13 @@ export function buildPublicWidgetConfig(project: Project, settings: EffectivePro
     use_host_typography: settings.useHostTypography,
     submit_button_style: settings.submitButtonStyle,
     composer_text_scale: settings.composerTextScale,
+    ...(typeof settings.submitButtonFgColor === "string" && settings.submitButtonFgColor
+      ? { submit_button_fg_color: settings.submitButtonFgColor }
+      : {}),
+    ...(typeof settings.mutedTextColor === "string" && settings.mutedTextColor
+      ? { muted_text_color: settings.mutedTextColor }
+      : {}),
     widget_mode: normalizeWidgetMode(project.widgetMode),
-    moderation_mode: project.moderationMode,
     locale: settings.locale,
     rating_scale: settings.ratingScale,
     enable_rating: settings.enableRating,

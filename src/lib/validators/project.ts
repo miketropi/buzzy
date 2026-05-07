@@ -1,6 +1,22 @@
+import { normalizeHexRgb } from "@/lib/contrast-color";
 import { z } from "zod";
 
 export const widgetModeSchema = z.enum(["comment", "review", "rating"]);
+
+/** Parses optional #rgb / #rrggbb for widget appearance (null clears overrides). */
+const optionalRgbHex = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v, ctx): string | null | undefined => {
+    if (v === undefined || v === null) return v;
+    const t = v.trim();
+    if (t === "") return null;
+    const norm = normalizeHexRgb(t);
+    if (!norm) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use hex like #f00 or #ff0044" });
+      return z.NEVER;
+    }
+    return norm;
+  });
 
 export const createProjectBodySchema = z.object({
   name: z.string().min(1).max(200),
@@ -11,14 +27,12 @@ export const createProjectBodySchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   allowedDomains: z.array(z.string().min(1).max(253)).default([]),
   widgetMode: widgetModeSchema.optional(),
-  moderationMode: z.enum(["auto", "manual", "ai"]).optional(),
 });
 
 export const patchProjectBodySchema = z.object({
   name: z.string().min(1).max(200).optional(),
   allowedDomains: z.array(z.string().min(1).max(253)).optional(),
   widgetMode: widgetModeSchema.optional(),
-  moderationMode: z.enum(["auto", "manual", "ai"]).optional(),
 });
 
 export const projectSettingsPatchSchema = z
@@ -30,6 +44,8 @@ export const projectSettingsPatchSchema = z
     borderRadius: z.string().max(32).optional(),
     submitButtonStyle: z.enum(["filled", "outline", "soft"]).optional(),
     composerTextScale: z.enum(["sm", "md", "lg"]).optional(),
+    submitButtonFgColor: optionalRgbHex.optional(),
+    mutedTextColor: optionalRgbHex.optional(),
     fontFamily: z.string().max(200).optional(),
     useHostTypography: z.boolean().optional(),
     widgetMode: widgetModeSchema.optional(),

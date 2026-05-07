@@ -19,7 +19,6 @@ export function toProjectResponse(project: Project) {
     ownerId: project.ownerId,
     allowedDomains: domainsFromJson(project.allowedDomains),
     widgetMode: normalizeWidgetMode(project.widgetMode),
-    moderationMode: project.moderationMode,
     settings,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
