@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchJson } from "../embed/embed-fetch";
 import { getStoredToken, setStoredToken } from "../embed/embed-auth";
+import { BUZZY_HOST_IDENTITY_EVENT, decodeHostIdentityPayloadForDisplay, getHostIdentityToken } from "../embed/embed-host-identity";
 import { BUZZY_PROFILE_EVENT, getEmbedProfile } from "../embed/embed-profile";
 import { CommentThreadContext, type CommentForEdit, type CommentThreadContextValue } from "./comment-thread-context";
 import { WidgetCommentThread, type ThreadComment } from "./bz-comment-card";
@@ -21,6 +22,7 @@ import {
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 
 type Features = {
+  allow_anonymous?: boolean;
   enable_replies?: boolean;
   enable_voting?: boolean;
   enable_rich_editor?: boolean;
@@ -36,6 +38,7 @@ export function EmbedCommentsApp({
 }) {
   const entryLayout = normalizeEntryLayout(cfg.entry_layout);
   const features = (cfg.features ?? {}) as Features;
+  const allowGuestVisitors = features.allow_anonymous !== false;
   const enableReplies = features.enable_replies !== false;
   const enableVoting = features.enable_voting !== false;
   const enableRich = features.enable_rich_editor !== false;
@@ -48,6 +51,9 @@ export function EmbedCommentsApp({
   const [email, setEmail] = useState(() => getEmbedProfile().email ?? "");
   const [avatarUrl, setAvatarUrl] = useState(() => getEmbedProfile().avatarUrl ?? "");
   const hostSsoProvisioned = useHostIdentityProvisioned();
+  /** Mirrors public API: posting allowed for guests, returning commenters (token), or Host SSO. */
+  const canCompose =
+    allowGuestVisitors || Boolean(getStoredToken(ctx.key)) || hostSsoProvisioned;
   const [plainContent, setPlainContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -78,13 +84,21 @@ export function EmbedCommentsApp({
     if (tok) headers["X-Commenter-Token"] = tok;
     return fetchJson(u, { headers }).then((j) => {
       const list = ((j.data as { comments?: ThreadComment[] })?.comments || []) as ThreadComment[];
-      setRows(list);
+      setRows(typeof structuredClone === "function" ? structuredClone(list) : JSON.parse(JSON.stringify(list)) as ThreadComment[]);
       setLoading(false);
     });
   }, [ctx.apiBase, ctx.key, ctx.pageUrl]);
 
   useEffect(() => {
     const sync = () => {
+      const raw = getHostIdentityToken();
+      const fromSso = raw ? decodeHostIdentityPayloadForDisplay(raw) : null;
+      if (fromSso?.name != null || fromSso?.email != null || fromSso?.avatarUrl != null) {
+        setName(fromSso.name ?? "");
+        setEmail(fromSso.email ?? "");
+        setAvatarUrl(fromSso.avatarUrl ?? "");
+        return;
+      }
       const p = getEmbedProfile();
       setName(p.name ?? "");
       setEmail(p.email ?? "");
@@ -92,7 +106,11 @@ export function EmbedCommentsApp({
     };
     sync();
     globalThis.addEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
-    return () => globalThis.removeEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
+    globalThis.addEventListener(BUZZY_HOST_IDENTITY_EVENT, sync as EventListener);
+    return () => {
+      globalThis.removeEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
+      globalThis.removeEventListener(BUZZY_HOST_IDENTITY_EVENT, sync as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -195,8 +213,9 @@ export function EmbedCommentsApp({
       onVote: vote,
       voteBusyId,
       onEdit: onEditComment,
+      canCompose,
     }),
-    [enableReplies, enableVoting, onReply, onQuote, vote, voteBusyId, onEditComment],
+    [enableReplies, enableVoting, onReply, onQuote, vote, voteBusyId, onEditComment, canCompose],
   );
 
   const closeComposer = useCallback(() => {
@@ -407,10 +426,20 @@ export function EmbedCommentsApp({
               </button>
             </p>
           ) : null}
+          {!canCompose && !loading ? (
+            <p className="bz-meta">Sign in to add a comment.</p>
+          ) : null}
           <button
             type="button"
             className="bz-btn bz-btn--block"
+            disabled={!canCompose}
+            title={
+              canCompose
+                ? undefined
+                : "Sign in to add a comment."
+            }
             onClick={() => {
+              if (!canCompose) return;
               setErr("");
               setSuccessMsg("");
               setEditingId(null);

@@ -119,6 +119,7 @@ export function WidgetCommentCardBody({
   const avatar = trustedCommenterAvatarUrl(avatarUrl);
   const ctx = useCommentThread();
   const interactive = Boolean(commentId && ctx);
+  const composeLocked = Boolean(interactive && ctx && !ctx.canCompose);
 
   const hideSyntheticText =
     body.trim() === "(attachments)" && attachments && attachments.length > 0;
@@ -142,7 +143,8 @@ export function WidgetCommentCardBody({
             <button
               type="button"
               className="bz-reply-btn"
-              disabled={ctx!.voteBusyId !== null}
+              disabled={ctx!.voteBusyId !== null || composeLocked}
+              title={composeLocked ? "Sign in to reply." : undefined}
               onClick={() => ctx!.onReply(commentId)}
             >
               <BzReplyIcon className="bz-icon-sm" />
@@ -151,7 +153,8 @@ export function WidgetCommentCardBody({
             <button
               type="button"
               className="bz-link"
-              disabled={ctx!.voteBusyId !== null}
+              disabled={ctx!.voteBusyId !== null || composeLocked}
+              title={composeLocked ? "Sign in to quote." : undefined}
               onClick={() => ctx!.onQuote(commentId, name, body)}
             >
               Quote
@@ -220,7 +223,15 @@ export function WidgetCommentCardBody({
       <div className={`bz-av ${avatarClass(variant)}${avatar ? " bz-av--photo" : ""}`} aria-hidden>
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element -- external avatar from trusted API
-          <img className="bz-av-img" src={avatar} alt="" width={44} height={44} loading="lazy" />
+          <img
+            key={commentId ? `bz-av-${commentId}-${avatar}` : avatar}
+            className="bz-av-img"
+            src={avatar}
+            alt=""
+            width={44}
+            height={44}
+            loading="lazy"
+          />
         ) : (
           initials
         )}

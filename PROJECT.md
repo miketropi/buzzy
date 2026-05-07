@@ -50,6 +50,7 @@ Deploy **`buzzy.js`** and the **`buzzy/`** folder (lazy **`embed-*.js`** chunks)
    - **Token:** `{payload}.{sig}`.
 3. **Embed:** `Buzzy.setHostIdentity(token)` or `Buzzy.init({ hostIdentity: token })` (alias `ssoAssertion`). Sends **`X-Buzzy-Host-Identity`** on API requests.
 4. **Behavior:** Upserts `Commenter` with `provider: host_sso`. Allows posting when **anonymous is disabled** if the assertion verifies. **Example:** `scripts/sign-host-sso-example.mjs`.
+5. **`sub` vs `externalId` & multiple apps:** see **`docs/host-sso-commenter-external-id.md`**.
 
 Regenerating the secret invalidates existing tokens.
 

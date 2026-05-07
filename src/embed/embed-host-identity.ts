@@ -1,5 +1,4 @@
 import { BUZZY_HOST_IDENTITY_HEADER } from "../lib/public-api/buzzy-host-identity-header";
-import { setEmbedProfile } from "./embed-profile";
 
 let token: string | null = null;
 
@@ -73,16 +72,6 @@ export function decodeHostIdentityPayloadForDisplay(
   return out;
 }
 
-function mergeProfileFieldsFromHostIdentityToken(raw: string | null) {
-  const d = decodeHostIdentityPayloadForDisplay(raw);
-  if (!d) return;
-  const patch: { name?: string; email?: string; avatarUrl?: string } = {};
-  if (d.name) patch.name = d.name;
-  if (d.email) patch.email = d.email;
-  if (d.avatarUrl) patch.avatarUrl = d.avatarUrl;
-  if (Object.keys(patch).length > 0) setEmbedProfile(patch);
-}
-
 function dispatchHostIdentityChanged() {
   if (typeof globalThis.dispatchEvent === "function") {
     globalThis.dispatchEvent(new Event(BUZZY_HOST_IDENTITY_EVENT));
@@ -93,9 +82,13 @@ export function getHostIdentityPresent(): boolean {
   return Boolean(token?.trim());
 }
 
+/** Raw Host SSO assertion for the current session — not merged into embed profile (viewer vs thread identity). */
+export function getHostIdentityToken(): string | null {
+  return token?.trim() ? token : null;
+}
+
 export function setHostIdentityToken(next: string | null) {
   token = next?.trim() || null;
-  if (token) mergeProfileFieldsFromHostIdentityToken(token);
   dispatchHostIdentityChanged();
 }
 

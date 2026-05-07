@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson } from "../embed/embed-fetch";
 import { getStoredToken, setStoredToken } from "../embed/embed-auth";
+import { BUZZY_HOST_IDENTITY_EVENT, decodeHostIdentityPayloadForDisplay, getHostIdentityToken } from "../embed/embed-host-identity";
 import { BUZZY_PROFILE_EVENT, getEmbedProfile } from "../embed/embed-profile";
 import { modeShowsPublicRatingSummary, type PublicWidgetMode } from "../lib/widget-mode-ux";
 import { WidgetInteractiveStars, WidgetStaticStars } from "./bz-stars";
@@ -21,6 +22,7 @@ import {
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 
 type Features = {
+  allow_anonymous?: boolean;
   enable_rich_editor?: boolean;
   allow_attachments?: boolean;
 };
@@ -42,6 +44,7 @@ export function EmbedReviewsApp({
   const ratingEnabled = !!cfg.enable_rating;
   const entryLayout = normalizeEntryLayout(cfg.entry_layout);
   const features = (cfg.features ?? {}) as Features;
+  const allowGuestVisitors = features.allow_anonymous !== false;
   const enableRich = features.enable_rich_editor !== false;
   const uploadsOk =
     cfg.uploads_configured === true && features.allow_attachments !== false;
@@ -54,6 +57,8 @@ export function EmbedReviewsApp({
   const [email, setEmail] = useState(() => getEmbedProfile().email ?? "");
   const [avatarUrl, setAvatarUrl] = useState(() => getEmbedProfile().avatarUrl ?? "");
   const hostSsoProvisioned = useHostIdentityProvisioned();
+  const canCompose =
+    allowGuestVisitors || Boolean(getStoredToken(ctx.key)) || hostSsoProvisioned;
   const [plainNote, setPlainNote] = useState("");
   const [rating, setRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -93,12 +98,24 @@ export function EmbedReviewsApp({
     return fetchJson(u).then((j) => {
       let list = ((j.data as { reviews?: ApiReview[] })?.reviews || []) as ApiReview[];
       if (ratingOnly && list.length > 3) list = list.slice(0, 3);
-      setReviews(list);
+      setReviews(
+        typeof structuredClone === "function"
+          ? structuredClone(list)
+          : (JSON.parse(JSON.stringify(list)) as ApiReview[]),
+      );
     });
   }, [ratingEnabled, ctx.apiBase, ctx.key, ctx.pageUrl, ratingOnly]);
 
   useEffect(() => {
     const sync = () => {
+      const raw = getHostIdentityToken();
+      const fromSso = raw ? decodeHostIdentityPayloadForDisplay(raw) : null;
+      if (fromSso?.name != null || fromSso?.email != null || fromSso?.avatarUrl != null) {
+        setName(fromSso.name ?? "");
+        setEmail(fromSso.email ?? "");
+        setAvatarUrl(fromSso.avatarUrl ?? "");
+        return;
+      }
       const p = getEmbedProfile();
       setName(p.name ?? "");
       setEmail(p.email ?? "");
@@ -106,7 +123,11 @@ export function EmbedReviewsApp({
     };
     sync();
     globalThis.addEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
-    return () => globalThis.removeEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
+    globalThis.addEventListener(BUZZY_HOST_IDENTITY_EVENT, sync as EventListener);
+    return () => {
+      globalThis.removeEventListener(BUZZY_PROFILE_EVENT, sync as EventListener);
+      globalThis.removeEventListener(BUZZY_HOST_IDENTITY_EVENT, sync as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -311,10 +332,22 @@ export function EmbedReviewsApp({
         {err && !composerOpen ? <p className="bz-msg">{err}</p> : null}
 
         <div className="bz-comp--cta">
+          {!canCompose && ratingEnabled ? (
+            <p className="bz-meta">Sign in to leave a rating.</p>
+          ) : null}
           <button
             type="button"
             className="bz-btn bz-btn--block"
+            disabled={!canCompose || !ratingEnabled}
+            title={
+              !ratingEnabled
+                ? "Ratings are disabled for this project."
+                : !canCompose
+                  ? "Sign in to leave a rating."
+                  : undefined
+            }
             onClick={() => {
+              if (!canCompose || !ratingEnabled) return;
               setErr("");
               setSuccessMsg("");
               setComposerStep(0);

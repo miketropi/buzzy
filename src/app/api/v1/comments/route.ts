@@ -56,14 +56,14 @@ export async function GET(request: NextRequest) {
 
     const settings = getEffectiveSettings(ctx.project.settings);
     const limit = clampLimit(q.limit, 20, 50);
+    /** Upsert host SSO viewer before listing so joined `commenter` rows match DB (avoids stale name/avatar for the viewer’s rows). */
+    const sessionCommenterId = await resolveSessionCommenterId(request, ctx.project, settings);
     const { roots, flatReplies, nextCursor, hasMore } = await listCommentsForPage({
       pageId: page.id,
       sort: q.sort,
       cursor: q.cursor,
       limit,
     });
-
-    const sessionCommenterId = await resolveSessionCommenterId(request, ctx.project, settings);
     const nested = nestPublicComments(roots, flatReplies, sessionCommenterId);
     if (sessionCommenterId) {
       const ids = collectCommentIdsFromTree(nested);

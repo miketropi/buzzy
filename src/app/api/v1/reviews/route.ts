@@ -17,6 +17,7 @@ import {
 import { listReviewsForPage } from "@/lib/public-api/review-queries";
 import { createOrReviveReview } from "@/lib/public-api/review-write";
 import { resolveAnonymousCommenterId } from "@/lib/public-api/resolve-anonymous-commenter";
+import { resolveSessionCommenterId } from "@/lib/public-api/resolve-session-commenter";
 import { runPublicApi } from "@/lib/public-api/handler";
 import {
   assertAttachmentsFromR2,
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
     }
 
     const limit = clampLimit(q.limit, 20, 50);
+    await resolveSessionCommenterId(request, ctx.project, settings);
     const { rows, nextCursor, hasMore } = await listReviewsForPage({
       pageId: page.id,
       projectId: ctx.project.id,
