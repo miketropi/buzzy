@@ -25,6 +25,8 @@ export const createCommentBodySchema = z
     /** Images, videos, and documents stored separately from html (R2 URLs only). */
     attachments: attachmentsPayloadSchema.optional(),
     commenter: commenterAnonymousSchema,
+    /** Cloudflare Turnstile response when captcha is required. */
+    captcha_token: z.string().max(4096).optional(),
   })
   .superRefine((data, ctx) => {
     const c = (data.content ?? "").trim();

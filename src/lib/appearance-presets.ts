@@ -4,17 +4,7 @@ export const ENTRY_LAYOUTS = [
   {
     value: "list",
     label: "List",
-    description: "Classic vertical stack — best for long threads and discussions.",
-  },
-  {
-    value: "card_grid",
-    label: "Card grid",
-    description: "Entries as equal tiles — strong for reviews and visual scanning.",
-  },
-  {
-    value: "carousel",
-    label: "Carousel",
-    description: "Horizontal scrolling row — compact hero or featured feedback.",
+    description: "Vertical stack — the standard layout for comments and reviews.",
   },
 ] as const;
 

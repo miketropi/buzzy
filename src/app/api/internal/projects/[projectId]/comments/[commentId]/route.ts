@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/project-access";
+import { writeModerationAuditLog } from "@/lib/internal/moderation-audit";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { ForbiddenError, NotFoundError } from "@/lib/utils/errors";
@@ -59,6 +60,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const patch = patchMessageStatusBodySchema.parse(await request.json());
     const existing = await prisma.comment.findFirst({
       where: { id: commentId, projectId },
+      select: { id: true, status: true },
     });
     if (!existing) {
       throw new NotFoundError("Comment not found");
@@ -71,6 +73,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         page: { select: { url: true, title: true } },
         commenter: { select: { name: true, provider: true, avatar: true } },
       },
+    });
+
+    await writeModerationAuditLog({
+      projectId,
+      actorUserId: ownerId,
+      action: `comment_${patch.status}`,
+      entityType: "comment",
+      entityId: commentId,
+      details: { from: existing.status, to: patch.status },
     });
 
     return jsonSuccess({ comment: serializeComment(updated) });

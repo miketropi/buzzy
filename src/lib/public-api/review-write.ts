@@ -19,6 +19,8 @@ export type CreateReviewInput = {
   attachments?: Prisma.InputJsonValue;
   status: string;
   submitterIp?: string | null;
+  duplicateBodyHash?: string | null;
+  advisorySignals?: Prisma.InputJsonValue;
 };
 
 export async function createOrReviveReview(
@@ -53,6 +55,8 @@ export async function createOrReviveReview(
         attachments: input.attachments ?? undefined,
         status: input.status,
         submitterIp: input.submitterIp ?? undefined,
+        duplicateBodyHash: input.duplicateBodyHash ?? undefined,
+        advisorySignals: input.advisorySignals ?? undefined,
       },
       include,
     });
@@ -77,6 +81,8 @@ export async function createOrReviveReview(
             attachments: input.attachments ?? Prisma.JsonNull,
             status: input.status,
             submitterIp: input.submitterIp ?? undefined,
+            duplicateBodyHash: input.duplicateBodyHash ?? undefined,
+            advisorySignals: input.advisorySignals ?? undefined,
             editedAt: null,
             helpfulCount: 0,
             unhelpfulCount: 0,

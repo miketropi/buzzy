@@ -6,12 +6,12 @@ import { BUZZY_PROFILE_EVENT, getEmbedProfile } from "../embed/embed-profile";
 import { modeShowsPublicRatingSummary, type PublicWidgetMode } from "../lib/widget-mode-ux";
 import { WidgetInteractiveStars, WidgetStaticStars } from "./bz-stars";
 import { WidgetReviewFeed, type ReviewFeedItem } from "./bz-review-card";
-import { normalizeEntryLayout } from "./entry-layout";
 import { BzAttachmentsPanel } from "./bz-attachments-panel";
 import { BzCommentEditor, type BzCommentEditorRef } from "./bz-comment-editor";
 import { BzComposerSsoSummary } from "./bz-composer-sso-summary";
 import { BzComposerModal } from "./bz-composer-modal";
 import { BzModalIntro } from "./bz-modal-intro";
+import { BzReportModal } from "./bz-report-modal";
 import { BzIconChevronLeft, BzIconChevronRight } from "./bz-modal-nav-icons";
 import type { EmbedAttachment } from "./attachment-types";
 import {
@@ -20,6 +20,8 @@ import {
   strippedFromHtml,
 } from "./rich-composer-helpers";
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
+import { widgetShouldShowTurnstileUi } from "@/lib/public-api/captcha-ui";
+import { BzTurnstile } from "./bz-turnstile";
 
 type Features = {
   allow_anonymous?: boolean;
@@ -42,12 +44,22 @@ export function EmbedReviewsApp({
   const mode: PublicWidgetMode = ratingOnly ? "rating" : "review";
   const showSummary = modeShowsPublicRatingSummary(mode);
   const ratingEnabled = !!cfg.enable_rating;
-  const entryLayout = normalizeEntryLayout(cfg.entry_layout);
   const features = (cfg.features ?? {}) as Features;
   const allowGuestVisitors = features.allow_anonymous !== false;
   const enableRich = features.enable_rich_editor !== false;
   const uploadsOk =
     cfg.uploads_configured === true && features.allow_attachments !== false;
+
+  const captchaSiteKey = typeof cfg.captcha_site_key === "string" ? cfg.captcha_site_key.trim() : "";
+  const captchaMode = String(cfg.captcha_mode ?? "anonymous_only");
+  const captchaRiskMinLinks =
+    typeof cfg.captcha_risk_min_links === "number" && Number.isFinite(cfg.captcha_risk_min_links)
+      ? cfg.captcha_risk_min_links
+      : undefined;
+  const captchaRiskMinScore =
+    typeof cfg.captcha_risk_min_score === "number" && Number.isFinite(cfg.captcha_risk_min_score)
+      ? cfg.captcha_risk_min_score
+      : undefined;
 
   const [avg, setAvg] = useState(0);
   const [total, setTotal] = useState(0);
@@ -68,6 +80,9 @@ export function EmbedReviewsApp({
   const [successMsg, setSuccessMsg] = useState("");
   /** Persists TipTap HTML when step 0 unmounts (Continue → step 1). */
   const [richDraftHtml, setRichDraftHtml] = useState("<p></p>");
+  const [reportReviewId, setReportReviewId] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaNonce, setCaptchaNonce] = useState(0);
 
   const editorRef = useRef<BzCommentEditorRef>(null);
 
@@ -150,9 +165,16 @@ export function EmbedReviewsApp({
     };
   }, [ratingEnabled, loadSummary, loadList]);
 
+  const trustedPoster = Boolean(getStoredToken(ctx.key)) || hostSsoProvisioned;
+  const onCaptchaToken = useCallback((t: string | null) => {
+    setCaptchaToken(t);
+  }, []);
+
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
     setComposerStep(0);
+    setCaptchaToken(null);
+    setCaptchaNonce((n) => n + 1);
   }, []);
 
   const goReviewStep2 = useCallback(() => {
@@ -169,8 +191,25 @@ export function EmbedReviewsApp({
       const html = editorRef.current?.getValues().html ?? "<p></p>";
       setRichDraftHtml(html);
     }
+    setCaptchaToken(null);
+    setCaptchaNonce((n) => n + 1);
     setComposerStep(1);
   }, [name, rating, enableRich, hostSsoProvisioned]);
+
+  function buildReviewSpamProbeForCaptcha(): string {
+    const title = "";
+    let plainFromText = "";
+    let plainFromHtml = "";
+    if (enableRich) {
+      const rawHtml = richDraftHtml.trim();
+      plainFromHtml = rawHtml;
+      plainFromText = strippedFromHtml(rawHtml);
+    } else {
+      plainFromText = plainNote.trim();
+    }
+    const attProbe = attachments.map((a) => `${a.filename ?? ""}\t${a.url}`).join("\n");
+    return [title, plainFromText, plainFromHtml, attProbe].join("\n");
+  }
 
   function submitReview() {
     setErr("");
@@ -230,6 +269,28 @@ export function EmbedReviewsApp({
       body.attachments = attachments;
     }
 
+    const plainFromTextForCaptcha = typeof body.content === "string" ? body.content : "";
+    const plainFromHtmlForCaptcha = typeof body.html === "string" ? body.html : "";
+    const attProbe = attachments.map((a) => `${a.filename ?? ""}\t${a.url}`).join("\n");
+    const captchaProbePost = ["", plainFromTextForCaptcha, plainFromHtmlForCaptcha, attProbe].join("\n");
+    if (
+      widgetShouldShowTurnstileUi({
+        hasSiteKey: Boolean(captchaSiteKey),
+        mode: captchaMode,
+        trustedPoster,
+        spamProbePlain: captchaProbePost,
+        riskMinLinks: captchaRiskMinLinks,
+        riskMinScore: captchaRiskMinScore,
+      })
+    ) {
+      if (!captchaToken?.trim()) {
+        setErr("Please complete the verification step.");
+        setSubmitting(false);
+        return;
+      }
+      body.captcha_token = captchaToken.trim();
+    }
+
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const tok = getStoredToken(ctx.key);
     if (tok) headers["X-Commenter-Token"] = tok;
@@ -285,6 +346,18 @@ export function EmbedReviewsApp({
     : ["Review", "Files"];
   const modalTitle = ratingOnly ? "Send a rating" : "Write a review";
   const ctaLabel = ratingOnly ? "Rate this" : "Write a review";
+  const captchaProbeForUi = composerOpen && composerStep === 1 ? buildReviewSpamProbeForCaptcha() : "";
+  const showTurnstile =
+    composerOpen &&
+    composerStep === 1 &&
+    widgetShouldShowTurnstileUi({
+      hasSiteKey: Boolean(captchaSiteKey),
+      mode: captchaMode,
+      trustedPoster,
+      spamProbePlain: captchaProbeForUi,
+      riskMinLinks: captchaRiskMinLinks,
+      riskMinScore: captchaRiskMinScore,
+    });
 
   return (
     <div className="bz-main-stack">
@@ -322,7 +395,11 @@ export function EmbedReviewsApp({
         <p className="bz-head">{heading}</p>
         <div className="bz-thread-entries">
           {reviews.length ? (
-            <WidgetReviewFeed layout={entryLayout} reviews={reviews} scale={scale} />
+            <WidgetReviewFeed
+              reviews={reviews}
+              scale={scale}
+              onReportReview={(id) => setReportReviewId(id)}
+            />
           ) : ratingOnly ? null : (
             <p className="bz-meta">No reviews yet.</p>
           )}
@@ -352,6 +429,8 @@ export function EmbedReviewsApp({
               setSuccessMsg("");
               setComposerStep(0);
               setRichDraftHtml("<p></p>");
+              setCaptchaToken(null);
+              setCaptchaNonce((n) => n + 1);
               setComposerOpen(true);
             }}
           >
@@ -386,6 +465,8 @@ export function EmbedReviewsApp({
                     onClick={() => {
                       setErr("");
                       setComposerStep(0);
+                      setCaptchaToken(null);
+                      setCaptchaNonce((n) => n + 1);
                     }}
                     disabled={submitting}
                   >
@@ -515,10 +596,24 @@ export function EmbedReviewsApp({
                   />
                 </div>
               </div>
+              {showTurnstile ? (
+                <div className="bz-form-field">
+                  <span className="bz-l">Verification</span>
+                  <BzTurnstile siteKey={captchaSiteKey} onToken={onCaptchaToken} resetKey={captchaNonce} />
+                </div>
+              ) : null}
             </>
           )}
         </BzComposerModal>
       </div>
+      <BzReportModal
+        open={reportReviewId !== null}
+        onClose={() => setReportReviewId(null)}
+        apiBase={ctx.apiBase}
+        apiKey={ctx.key}
+        variant="review"
+        targetId={reportReviewId}
+      />
     </div>
   );
 }

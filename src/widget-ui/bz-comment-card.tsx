@@ -1,4 +1,3 @@
-import type { EntryLayout } from "@/lib/appearance-presets";
 import type { ReactNode } from "react";
 import { useCommentThread } from "./comment-thread-context";
 import { BzReplyIcon, BzThumbDownIcon, BzThumbUpIcon } from "./bz-icons";
@@ -135,77 +134,91 @@ export function WidgetCommentCardBody({
     );
 
   let actions: ReactNode = null;
-  if (interactive && commentId && (ctx!.enableReplies || ctx!.enableVoting)) {
-    actions = (
-      <div className="bz-actions-row">
-        {ctx!.enableReplies ? (
-          <>
-            <button
-              type="button"
-              className="bz-reply-btn"
-              disabled={ctx!.voteBusyId !== null || composeLocked}
-              title={composeLocked ? "Sign in to reply." : undefined}
-              onClick={() => ctx!.onReply(commentId)}
-            >
-              <BzReplyIcon className="bz-icon-sm" />
-              Reply
-            </button>
-            <button
-              type="button"
-              className="bz-link"
-              disabled={ctx!.voteBusyId !== null || composeLocked}
-              title={composeLocked ? "Sign in to quote." : undefined}
-              onClick={() => ctx!.onQuote(commentId, name, body)}
-            >
-              Quote
-            </button>
-            {ctx!.onEdit && canEdit ? (
+  if (interactive && commentId && ctx) {
+    const c = ctx;
+    const showRow = c.enableReplies || c.enableVoting || Boolean(c.onReport);
+    if (showRow) {
+      actions = (
+        <div className="bz-actions-row">
+          {c.enableReplies ? (
+            <>
+              <button
+                type="button"
+                className="bz-reply-btn"
+                disabled={c.voteBusyId !== null || composeLocked}
+                title={composeLocked ? "Sign in to reply." : undefined}
+                onClick={() => c.onReply(commentId)}
+              >
+                <BzReplyIcon className="bz-icon-sm" />
+                Reply
+              </button>
               <button
                 type="button"
                 className="bz-link"
-                disabled={ctx!.voteBusyId !== null}
-                onClick={() =>
-                  ctx!.onEdit!({
-                    id: commentId,
-                    content: body,
-                    html_content: htmlBody ?? null,
-                    attachments: attachments ?? [],
-                  })
-                }
+                disabled={c.voteBusyId !== null || composeLocked}
+                title={composeLocked ? "Sign in to quote." : undefined}
+                onClick={() => c.onQuote(commentId, name, body)}
               >
-                Edit
+                Quote
               </button>
-            ) : null}
-          </>
-        ) : null}
-        {ctx!.enableVoting ? (
-          <span className="bz-votes">
+              {c.onEdit && canEdit ? (
+                <button
+                  type="button"
+                  className="bz-link"
+                  disabled={c.voteBusyId !== null}
+                  onClick={() =>
+                    c.onEdit!({
+                      id: commentId,
+                      content: body,
+                      html_content: htmlBody ?? null,
+                      attachments: attachments ?? [],
+                    })
+                  }
+                >
+                  Edit
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {c.onReport ? (
             <button
               type="button"
-              className={`bz-vote-btn${yourVote === 1 ? " bz-sel" : ""}`}
-              disabled={ctx!.voteBusyId !== null}
-              aria-pressed={yourVote === 1}
-              aria-label={`Like${upvotes ? `, ${upvotes}` : ""}`}
-              onClick={() => ctx!.onVote(commentId, yourVote === 1 ? 0 : 1)}
+              className="bz-link"
+              disabled={c.voteBusyId !== null}
+              onClick={() => c.onReport!(commentId)}
             >
-              <BzThumbUpIcon className="bz-icon-sm bz-vote-ico" />
-              <span>{upvotes}</span>
+              Report
             </button>
-            <button
-              type="button"
-              className={`bz-vote-btn${yourVote === -1 ? " bz-sel" : ""}`}
-              disabled={ctx!.voteBusyId !== null}
-              aria-pressed={yourVote === -1}
-              aria-label={`Dislike${downvotes ? `, ${downvotes}` : ""}`}
-              onClick={() => ctx!.onVote(commentId, yourVote === -1 ? 0 : -1)}
-            >
-              <BzThumbDownIcon className="bz-icon-sm bz-vote-ico" />
-              <span>{downvotes}</span>
-            </button>
-          </span>
-        ) : null}
-      </div>
-    );
+          ) : null}
+          {c.enableVoting ? (
+            <span className="bz-votes">
+              <button
+                type="button"
+                className={`bz-vote-btn${yourVote === 1 ? " bz-sel" : ""}`}
+                disabled={c.voteBusyId !== null}
+                aria-pressed={yourVote === 1}
+                aria-label={`Like${upvotes ? `, ${upvotes}` : ""}`}
+                onClick={() => c.onVote(commentId, yourVote === 1 ? 0 : 1)}
+              >
+                <BzThumbUpIcon className="bz-icon-sm bz-vote-ico" />
+                <span>{upvotes}</span>
+              </button>
+              <button
+                type="button"
+                className={`bz-vote-btn${yourVote === -1 ? " bz-sel" : ""}`}
+                disabled={c.voteBusyId !== null}
+                aria-pressed={yourVote === -1}
+                aria-label={`Dislike${downvotes ? `, ${downvotes}` : ""}`}
+                onClick={() => c.onVote(commentId, yourVote === -1 ? 0 : -1)}
+              >
+                <BzThumbDownIcon className="bz-icon-sm bz-vote-ico" />
+                <span>{downvotes}</span>
+              </button>
+            </span>
+          ) : null}
+        </div>
+      );
+    }
   } else if (showActions) {
     actions = (
       <div className="bz-actions">
@@ -280,7 +293,7 @@ export function WidgetCommentCard({
   body?: string;
   meta?: string;
   showActions?: boolean;
-  /** `flat`: list-style dividers · `raised`: grid / carousel tiles (default). */
+  /** `flat`: list-style dividers · `raised`: elevated card surface (default). */
   cardSurface?: "raised" | "flat";
 }) {
   const resolvedName = name ?? "Alex M.";
@@ -303,40 +316,14 @@ export function WidgetCommentCard({
   );
 }
 
-/** Live API thread — list / card grid / carousel (matches dashboard preview). */
+/** Live API thread — vertical list layout. */
 export function WidgetCommentThread({
   items,
   variant,
-  entryLayout = "list",
 }: {
   items: ThreadComment[];
   variant: Variant;
-  entryLayout?: EntryLayout;
 }) {
-  if (entryLayout === "card_grid") {
-    return (
-      <div className="bz-grid bz-grid--2">
-        {items.map((c, i) => (
-          <CommentThreadNode key={c.id || `c-${i}`} node={c} variant="comfortable" cardSurface="raised" />
-        ))}
-      </div>
-    );
-  }
-  if (entryLayout === "carousel") {
-    return (
-      <div>
-        <p className="bz-carousel-hint">Swipe or scroll horizontally for more.</p>
-        <div className="bz-carousel">
-          {items.map((c, i) => (
-            <div key={c.id || `c-${i}`} className="bz-carousel-card">
-              <CommentThreadNode node={c} variant="compact" cardSurface="raised" />
-              <p className="bz-carousel-label">Comment {i + 1}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
   return (
     <div className="bz-list bz-stack">
       <div className="bz-entry-list-group">

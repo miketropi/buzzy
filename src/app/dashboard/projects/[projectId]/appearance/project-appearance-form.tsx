@@ -3,9 +3,7 @@
 import type { ReactNode } from "react";
 import {
   Eye,
-  GalleryHorizontal,
   Info,
-  LayoutGrid,
   LayoutList,
   MousePointer2,
   PenLine,
@@ -15,18 +13,12 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { contrastingForeground, normalizeHexRgb } from "@/lib/contrast-color";
-import { COLOR_PRESETS, ENTRY_LAYOUTS, type ColorPresetId, presetPrimary } from "@/lib/appearance-presets";
-import type { ComposerTextScale, SubmitButtonStyle } from "@/lib/widget-chrome-tokens";
+import { COLOR_PRESETS, type ColorPresetId, presetPrimary } from "@/lib/appearance-presets";
+import type { SubmitButtonStyle } from "@/lib/widget-chrome-tokens";
 import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { WidgetAppearancePreview } from "@/components/widget-appearance-preview";
 
 const themes = ["light", "dark", "auto"] as const;
-
-const layoutIcons = {
-  list: LayoutList,
-  card_grid: LayoutGrid,
-  carousel: GalleryHorizontal,
-} as const;
 
 function inferPresetFromPrimary(hex: string): ColorPresetId {
   const norm = hex.trim().toLowerCase();
@@ -46,28 +38,16 @@ const submitButtonOptions: {
   { value: "soft", label: "Soft", description: "Tinted, calmer surface" },
 ];
 
-const composerTextOptions: {
-  value: ComposerTextScale;
-  label: string;
-  description: string;
-}[] = [
-  { value: "sm", label: "Compact", description: "Smaller labels and fields" },
-  { value: "md", label: "Standard", description: "Balanced default" },
-  { value: "lg", label: "Comfort", description: "Larger body text" },
-];
-
 export function ProjectAppearanceForm({
   projectId,
   previewWidgetMode,
   initialTheme,
   initialPrimaryColor,
   initialColorPreset,
-  initialEntryLayout,
   initialBorderRadius,
   initialFontFamily,
   initialUseHostTypography,
   initialSubmitButtonStyle,
-  initialComposerTextScale,
   initialSubmitButtonFgColor,
   initialMutedTextColor,
   slots,
@@ -77,12 +57,10 @@ export function ProjectAppearanceForm({
   initialTheme: string;
   initialPrimaryColor: string;
   initialColorPreset: string;
-  initialEntryLayout: string;
   initialBorderRadius: string;
   initialFontFamily: string;
   initialUseHostTypography: boolean;
   initialSubmitButtonStyle: string;
-  initialComposerTextScale: string;
   initialSubmitButtonFgColor: string | null;
   initialMutedTextColor: string | null;
   /** Compose options + preview inside a parent layout (e.g. unified settings + sticky preview column). */
@@ -96,9 +74,6 @@ export function ProjectAppearanceForm({
     const id = initialColorPreset as ColorPresetId;
     return COLOR_PRESETS.some((p) => p.id === id) ? id : inferPresetFromPrimary(initialPrimaryColor);
   });
-  const [entryLayout, setEntryLayout] = useState(
-    ENTRY_LAYOUTS.some((l) => l.value === initialEntryLayout) ? initialEntryLayout : "list",
-  );
   const [borderRadius, setBorderRadius] = useState(initialBorderRadius);
   const [fontFamily, setFontFamily] = useState(initialFontFamily);
   const [useHostTypography, setUseHostTypography] = useState(initialUseHostTypography);
@@ -106,11 +81,6 @@ export function ProjectAppearanceForm({
     submitButtonOptions.some((o) => o.value === initialSubmitButtonStyle)
       ? (initialSubmitButtonStyle as SubmitButtonStyle)
       : "filled",
-  );
-  const [composerTextScale, setComposerTextScale] = useState<ComposerTextScale>(() =>
-    composerTextOptions.some((o) => o.value === initialComposerTextScale)
-      ? (initialComposerTextScale as ComposerTextScale)
-      : "md",
   );
   function coerceStoredHex(input: string | null | undefined): string | null {
     if (!input || typeof input !== "string") return null;
@@ -177,12 +147,12 @@ export function ProjectAppearanceForm({
           theme,
           primaryColor,
           colorPreset,
-          entryLayout,
+          entryLayout: "list",
           borderRadius,
           fontFamily,
           useHostTypography,
           submitButtonStyle,
-          composerTextScale,
+          composerTextScale: "md",
           submitButtonFgColor: submitNorm,
           mutedTextColor: mutedNorm,
         }),
@@ -223,36 +193,55 @@ export function ProjectAppearanceForm({
 
       <section className="space-y-2.5">
         <div className="flex items-center gap-2">
-          <LayoutList className="h-4 w-4 text-brand" strokeWidth={2} />
+          <Settings2 className="h-4 w-4 text-brand" strokeWidth={2} />
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-white">
-            Entry layout
+            Theme &amp; shape
           </h3>
         </div>
         <p className="text-sm text-slate-600 dark:text-zinc-400">
-          How individual comments or reviews are arranged. The live widget applies the same structure inside your host
-          container.
+          Light/dark preference, rounded corners, and how the thread reads in the embed.
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {ENTRY_LAYOUTS.map((opt) => {
-            const Ico = layoutIcons[opt.value];
-            const selected = entryLayout === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setEntryLayout(opt.value)}
-                className={`flex flex-col items-start gap-2 rounded-md border px-3 py-3 text-left transition ${
-                  selected
-                    ? "border-brand/50 bg-brand-muted ring-1 ring-brand/25 dark:bg-brand/10 dark:ring-brand/35"
-                    : "border-slate-200 bg-white hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
-                }`}
-              >
-                <Ico className={`h-5 w-5 ${selected ? "text-brand" : "text-slate-500 dark:text-zinc-400"}`} />
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">{opt.label}</span>
-                <span className="text-xs leading-snug text-slate-500 dark:text-zinc-500">{opt.description}</span>
-              </button>
-            );
-          })}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="theme" className="block text-xs font-medium text-slate-600 dark:text-zinc-400">
+              Color mode
+            </label>
+            <select
+              id="theme"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
+            >
+              {themes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-500">
+              Light, dark, or follow the visitor&apos;s system.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="borderRadius" className="block text-xs font-medium text-slate-600 dark:text-zinc-400">
+              Corner radius
+            </label>
+            <input
+              id="borderRadius"
+              value={borderRadius}
+              onChange={(e) => setBorderRadius(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
+              placeholder="8px"
+            />
+            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-500">Any CSS length (e.g. 8px, 0.5rem).</p>
+          </div>
+        </div>
+        <div className="flex gap-3 rounded-md border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/40">
+          <LayoutList className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-zinc-500" strokeWidth={2} />
+          <p className="text-xs leading-relaxed text-slate-600 dark:text-zinc-400">
+            <strong className="font-medium text-slate-800 dark:text-zinc-200">Feed layout</strong> is always a
+            vertical list — no extra mode to choose.
+          </p>
         </div>
       </section>
 
@@ -378,11 +367,12 @@ export function ProjectAppearanceForm({
         <div className="flex items-center gap-2">
           <MousePointer2 className="h-4 w-4 text-brand" strokeWidth={2} />
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-white">
-            Submit button &amp; text
+            Submit button &amp; labels
           </h3>
         </div>
         <p className="text-sm text-slate-600 dark:text-zinc-400">
-          Primary actions in the composer (Post, Continue, Submit) and base size for labels, inputs, and helper copy.
+          Style for Post, Continue, and Submit in the composer. Optional overrides below adjust primary button label and
+          muted helper text.
         </p>
         <div>
           <p className="mb-2 text-xs font-medium text-slate-600 dark:text-zinc-400">Button style</p>
@@ -394,29 +384,6 @@ export function ProjectAppearanceForm({
                   key={opt.value}
                   type="button"
                   onClick={() => setSubmitButtonStyle(opt.value)}
-                  className={`flex flex-col items-start gap-2 rounded-md border px-3 py-3 text-left transition ${
-                    selected
-                      ? "border-brand/50 bg-brand-muted ring-1 ring-brand/25 dark:bg-brand/10 dark:ring-brand/35"
-                      : "border-slate-200 bg-white hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
-                  }`}
-                >
-                  <span className="text-sm font-semibold text-slate-900 dark:text-white">{opt.label}</span>
-                  <span className="text-xs leading-snug text-slate-500 dark:text-zinc-500">{opt.description}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-medium text-slate-600 dark:text-zinc-400">Composer text size</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {composerTextOptions.map((opt) => {
-              const selected = composerTextScale === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setComposerTextScale(opt.value)}
                   className={`flex flex-col items-start gap-2 rounded-md border px-3 py-3 text-left transition ${
                     selected
                       ? "border-brand/50 bg-brand-muted ring-1 ring-brand/25 dark:bg-brand/10 dark:ring-brand/35"
@@ -558,48 +525,6 @@ export function ProjectAppearanceForm({
         </div>
       </section>
 
-      <section className="space-y-2.5">
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-4 w-4 text-brand" strokeWidth={2} />
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-white">
-            Theme & shape
-          </h3>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="theme" className="block text-xs font-medium text-slate-600 dark:text-zinc-400">
-              Color mode
-            </label>
-            <select
-              id="theme"
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-            >
-              {themes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-500">Light, dark, or follow the visitor&apos;s system.</p>
-          </div>
-          <div>
-            <label htmlFor="borderRadius" className="block text-xs font-medium text-slate-600 dark:text-zinc-400">
-              Corner radius
-            </label>
-            <input
-              id="borderRadius"
-              value={borderRadius}
-              onChange={(e) => setBorderRadius(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-              placeholder="8px"
-            />
-            <p className="mt-1 text-xs text-slate-500 dark:text-zinc-500">Any CSS length (e.g. 8px, 0.5rem).</p>
-          </div>
-        </div>
-      </section>
-
       <button type="submit" disabled={loading} className="btn-primary">
         {loading ? "Saving…" : "Save appearance"}
       </button>
@@ -615,10 +540,8 @@ export function ProjectAppearanceForm({
       fontFamily={fontFamily}
       useHostTypography={useHostTypography}
       submitButtonStyle={submitButtonStyle}
-      composerTextScale={composerTextScale}
       submitButtonFgColor={previewSubmitFgHex}
       mutedTextColor={previewMutedHex}
-      entryLayout={entryLayout}
     />
   );
 
@@ -627,62 +550,70 @@ export function ProjectAppearanceForm({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-4 dark:border-zinc-700">
-        <div>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 dark:border-zinc-700 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-zinc-400">Appearance</p>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Widget look & layout</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-zinc-400">
-            Layout, colors, and typography for the embed — published via <code className="text-xs">/api/v1/config</code>.
-            Use <strong className="font-medium text-slate-800 dark:text-zinc-200">Options</strong> and{" "}
-            <strong className="font-medium text-slate-800 dark:text-zinc-200">Preview</strong> on smaller screens.
-            Install steps live under <strong className="font-medium text-slate-800 dark:text-zinc-200">How to use</strong>.
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 dark:text-white">Widget look</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-zinc-400">
+            Colors, type, and chrome for the embed (via <code className="text-xs">/api/v1/config</code>).{" "}
+            <strong className="font-medium text-slate-800 dark:text-zinc-200">Options</strong> /{" "}
+            <strong className="font-medium text-slate-800 dark:text-zinc-200">Preview</strong> on small screens.
           </p>
-          <p className="mt-2 text-sm font-medium text-slate-700 dark:text-zinc-300">
-            Preview mode:{" "}
+          <p className="mt-3 text-sm">
+            <span className="font-medium text-slate-700 dark:text-zinc-300">Preview mode</span>{" "}
             <span className="text-slate-900 dark:text-white">
               {WIDGET_MODE_PREVIEW[normalizeWidgetMode(previewWidgetMode)].headline}
             </span>
-            <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-zinc-500 sm:text-sm">
+            <span className="mt-1 block text-xs text-slate-500 dark:text-zinc-500">
               {WIDGET_MODE_PREVIEW[normalizeWidgetMode(previewWidgetMode)].description}
             </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setMobileTab("options")}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-            mobileTab === "options"
-              ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
-              : "text-slate-600 dark:text-zinc-400"
-          }`}
-        >
-          <Settings2 className="h-4 w-4" />
-          Options
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileTab("preview")}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-            mobileTab === "preview"
-              ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
-              : "text-slate-600 dark:text-zinc-400"
-          }`}
-        >
-          <Eye className="h-4 w-4" />
-          Preview
-        </button>
+        <div className="flex shrink-0 gap-2 sm:pt-1">
+          <button
+            type="button"
+            onClick={() => setMobileTab("options")}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              mobileTab === "options"
+                ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
+                : "text-slate-600 dark:text-zinc-400"
+            }`}
+          >
+            <Settings2 className="h-4 w-4" />
+            Options
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("preview")}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              mobileTab === "preview"
+                ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
+                : "text-slate-600 dark:text-zinc-400"
+            }`}
+          >
+            <Eye className="h-4 w-4" />
+            Preview
+          </button>
+        </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-[minmax(280px,34%)_1fr] lg:items-start lg:gap-8 xl:gap-10">
-        <div className={`rounded-md border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 ${mobileTab === "preview" ? "hidden lg:block" : ""}`}>
-          {optionsPanel}
-        </div>
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
         <div
-          className={`lg:sticky lg:top-4 lg:self-start lg:overflow-x-hidden ${mobileTab === "options" ? "hidden lg:block" : ""}`}
+          className={`min-w-0 lg:max-w-xl lg:flex-1 ${mobileTab === "preview" ? "hidden lg:block" : ""}`}
         >
-          {previewPanel}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            {optionsPanel}
+          </div>
         </div>
+        <aside
+          className={`min-w-0 lg:flex-1 lg:max-w-[520px] ${mobileTab === "options" ? "hidden lg:block" : ""}`}
+        >
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-500">
+            Live preview
+          </p>
+          <div className="lg:sticky lg:top-6">{previewPanel}</div>
+        </aside>
       </div>
     </div>
   );

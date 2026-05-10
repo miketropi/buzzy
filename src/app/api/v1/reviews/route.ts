@@ -7,6 +7,7 @@ import { findOrCreatePage, findPageByProjectAndUrl } from "@/lib/public-api/page
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import {
   assertReviewPostRateLimit,
+  assertReviewPostRateLimitForIdentity,
   clientIp,
   submitterIpFromRequest,
 } from "@/lib/public-api/rate-limit-request";
@@ -16,6 +17,8 @@ import {
 } from "@/lib/public-api/review-categories";
 import { listReviewsForPage } from "@/lib/public-api/review-queries";
 import { createOrReviveReview } from "@/lib/public-api/review-write";
+import { isTrustedWidgetPoster } from "@/lib/public-api/widget-poster-trust";
+import { assertNoRecentDuplicateReview, reviewDuplicateFingerprint } from "@/lib/public-api/content-duplicate";
 import { resolveAnonymousCommenterId } from "@/lib/public-api/resolve-anonymous-commenter";
 import { resolveSessionCommenterId } from "@/lib/public-api/resolve-session-commenter";
 import { runPublicApi } from "@/lib/public-api/handler";
@@ -24,10 +27,10 @@ import {
   attachmentsSpamProbe,
 } from "@/lib/public-api/attachments";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
-import {
-  isBlockedIp,
-  matchesSpamPatterns,
-} from "@/lib/public-api/spam";
+import { domainsFromJson } from "@/lib/json-domains";
+import { buildContentAdvisoryPayload } from "@/lib/public-api/content-advisory";
+import { assertTurnstileCaptchaIfNeeded } from "@/lib/public-api/captcha-gate";
+import { getSpamBlockReasonForText, isBlockedIp } from "@/lib/public-api/spam";
 import { singlePublicReview } from "@/lib/public-api/serialize-review";
 import { ForbiddenError, ValidationError } from "@/lib/utils/errors";
 import { jsonSuccess } from "@/lib/utils/response";
@@ -115,8 +118,17 @@ export async function POST(request: NextRequest) {
     const plainFromText = body.content ? sanitizeCommentContent(body.content) : "";
     const plainFromHtml = body.html ? sanitizeCommentContent(body.html) : "";
     const spamProbe = `${title ?? ""}\n${plainFromText}\n${plainFromHtml}\n${attachmentsSpamProbe(attachmentList)}`;
-    if (matchesSpamPatterns(spamProbe, settings)) {
-      throw new ValidationError("This message was blocked by the spam filter");
+    const trustedPoster = isTrustedWidgetPoster(ctx.request, ctx.project);
+    await assertTurnstileCaptchaIfNeeded(
+      settings,
+      ctx.request,
+      body.captcha_token,
+      trustedPoster,
+      spamProbe,
+    );
+    const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+    if (spamReason) {
+      throw new ValidationError(spamReason);
     }
 
     let htmlContent: string | null = null;
@@ -150,6 +162,40 @@ export async function POST(request: NextRequest) {
     const page = await findOrCreatePage(ctx.project.id, body.page_url, body.page_title);
     const commenterId = await resolveAnonymousCommenterId(ctx, body, settings);
 
+    await assertReviewPostRateLimitForIdentity(ctx.project.id, commenterId, settings);
+
+    const dupWindow =
+      typeof settings.spamDuplicateWindowSeconds === "number" &&
+      Number.isFinite(settings.spamDuplicateWindowSeconds)
+        ? Math.min(604800, Math.max(0, Math.floor(settings.spamDuplicateWindowSeconds)))
+        : 0;
+    const dupHash = reviewDuplicateFingerprint(title || null, content);
+    if (dupHash) {
+      await assertNoRecentDuplicateReview({
+        projectId: ctx.project.id,
+        pageId: page.id,
+        fingerprint: dupHash,
+        windowSeconds: dupWindow,
+      });
+    }
+
+    const firstHost = domainsFromJson(ctx.project.allowedDomains)[0];
+    const advisoryProbe = [title ?? "", content ?? "", htmlContent ?? ""].join("\n").slice(0, 100_000);
+    const { advisory, rejectForAkismet } = await buildContentAdvisoryPayload({
+      request: ctx.request,
+      settings,
+      projectId: ctx.project.id,
+      firstAllowedDomain: firstHost,
+      pageUrl: body.page_url,
+      bodyText: advisoryProbe.trim().length ? advisoryProbe : "(rating only)",
+      authorName: body.commenter.name,
+      authorEmail: body.commenter.email?.trim() || null,
+      kind: "review",
+    });
+    if (rejectForAkismet) {
+      throw new ValidationError("This message could not be posted (spam check).");
+    }
+
     const status = settings.requireApproval ? "pending" : "approved";
 
     const review = await createOrReviveReview(
@@ -165,6 +211,8 @@ export async function POST(request: NextRequest) {
         attachments: attachmentList.length > 0 ? (attachmentList as Prisma.InputJsonValue) : undefined,
         status,
         submitterIp: submitterIpFromRequest(request),
+        duplicateBodyHash: dupHash || null,
+        advisorySignals: advisory,
       },
       settings.allowMultipleReviews,
     );

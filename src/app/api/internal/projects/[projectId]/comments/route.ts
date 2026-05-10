@@ -5,7 +5,10 @@ import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/proj
 import { getOrCreateStaffCommenter } from "@/lib/internal/staff-commenter";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
-import { matchesSpamPatterns } from "@/lib/public-api/spam";
+import {
+  duplicateBodyFingerprint,
+} from "@/lib/public-api/content-duplicate";
+import { getSpamBlockReasonForText } from "@/lib/public-api/spam";
 import { submitterIpFromRequest } from "@/lib/public-api/rate-limit-request";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import {
@@ -175,11 +178,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const spamProbe = `${content}\n${htmlContent ?? ""}`;
-    if (matchesSpamPatterns(spamProbe, settings)) {
-      throw new ValidationError("This message was blocked by the spam filter");
+    const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+    if (spamReason) {
+      throw new ValidationError(spamReason);
     }
 
     const commenter = await getOrCreateStaffCommenter(projectId, user);
+
+    const dupHash = duplicateBodyFingerprint(content);
     const comment = await prisma.comment.create({
       data: {
         projectId,
@@ -191,6 +197,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         status: "approved",
         depth: parent.depth + 1,
         submitterIp: submitterIpFromRequest(request),
+        duplicateBodyHash: dupHash || undefined,
       },
       include: {
         page: { select: { url: true, title: true } },

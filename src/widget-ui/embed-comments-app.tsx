@@ -11,15 +11,17 @@ import { BzCommentEditor, type BzCommentEditorRef } from "./bz-comment-editor";
 import { BzComposerSsoSummary } from "./bz-composer-sso-summary";
 import { BzComposerModal } from "./bz-composer-modal";
 import { BzModalIntro } from "./bz-modal-intro";
+import { BzReportModal } from "./bz-report-modal";
 import { BzIconChevronLeft, BzIconChevronRight } from "./bz-modal-nav-icons";
 import type { EmbedAttachment } from "./attachment-types";
-import { normalizeEntryLayout } from "./entry-layout";
 import {
   isRichEditorSubstantivelyEmpty,
   shouldSendRichHtml,
   strippedFromHtml,
 } from "./rich-composer-helpers";
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
+import { widgetShouldShowTurnstileUi } from "@/lib/public-api/captcha-ui";
+import { BzTurnstile } from "./bz-turnstile";
 
 type Features = {
   allow_anonymous?: boolean;
@@ -36,13 +38,23 @@ export function EmbedCommentsApp({
   ctx: { key: string; apiBase: string; pageUrl: string; pageTitle: string };
   cfg: Record<string, unknown>;
 }) {
-  const entryLayout = normalizeEntryLayout(cfg.entry_layout);
   const features = (cfg.features ?? {}) as Features;
   const allowGuestVisitors = features.allow_anonymous !== false;
   const enableReplies = features.enable_replies !== false;
   const enableVoting = features.enable_voting !== false;
   const enableRich = features.enable_rich_editor !== false;
   const uploadsOk = cfg.uploads_configured === true && features.allow_attachments !== false;
+
+  const captchaSiteKey = typeof cfg.captcha_site_key === "string" ? cfg.captcha_site_key.trim() : "";
+  const captchaMode = String(cfg.captcha_mode ?? "anonymous_only");
+  const captchaRiskMinLinks =
+    typeof cfg.captcha_risk_min_links === "number" && Number.isFinite(cfg.captcha_risk_min_links)
+      ? cfg.captcha_risk_min_links
+      : undefined;
+  const captchaRiskMinScore =
+    typeof cfg.captcha_risk_min_score === "number" && Number.isFinite(cfg.captcha_risk_min_score)
+      ? cfg.captcha_risk_min_score
+      : undefined;
 
   const [rows, setRows] = useState<ThreadComment[]>([]);
   const [err, setErr] = useState("");
@@ -66,6 +78,9 @@ export function EmbedCommentsApp({
   const [richDraftHtml, setRichDraftHtml] = useState("<p></p>");
   /** When set, composer is patching this comment instead of posting a new one. */
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [reportCommentId, setReportCommentId] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaNonce, setCaptchaNonce] = useState(0);
 
   const editorRef = useRef<BzCommentEditorRef>(null);
   const plainRef = useRef<HTMLTextAreaElement>(null);
@@ -163,6 +178,8 @@ export function EmbedCommentsApp({
       setRichDraftHtml(c.html_content?.trim() ? (c.html_content as string) : "<p></p>");
       setAttachments(c.attachments ?? []);
       setComposerStep(0);
+      setCaptchaToken(null);
+      setCaptchaNonce((n) => n + 1);
       setComposerOpen(true);
       if (enableRich) requestAnimationFrame(() => editorRef.current?.focus());
       else requestAnimationFrame(() => plainRef.current?.focus());
@@ -176,6 +193,8 @@ export function EmbedCommentsApp({
       setParentId(id);
       setRichDraftHtml("<p></p>");
       setComposerStep(0);
+      setCaptchaToken(null);
+      setCaptchaNonce((n) => n + 1);
       setComposerOpen(true);
       if (enableRich) requestAnimationFrame(() => editorRef.current?.focus());
       else requestAnimationFrame(() => plainRef.current?.focus());
@@ -188,6 +207,8 @@ export function EmbedCommentsApp({
       setEditingId(null);
       setComposerStep(0);
       setRichDraftHtml("<p></p>");
+      setCaptchaToken(null);
+      setCaptchaNonce((n) => n + 1);
       setComposerOpen(true);
       if (enableRich) {
         requestAnimationFrame(() => {
@@ -213,15 +234,23 @@ export function EmbedCommentsApp({
       onVote: vote,
       voteBusyId,
       onEdit: onEditComment,
+      onReport: (id: string) => setReportCommentId(id),
       canCompose,
     }),
     [enableReplies, enableVoting, onReply, onQuote, vote, voteBusyId, onEditComment, canCompose],
   );
 
+  const trustedPoster = Boolean(getStoredToken(ctx.key)) || hostSsoProvisioned;
+  const onCaptchaToken = useCallback((t: string | null) => {
+    setCaptchaToken(t);
+  }, []);
+
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
     setComposerStep(0);
     setEditingId(null);
+    setCaptchaToken(null);
+    setCaptchaNonce((n) => n + 1);
   }, []);
 
   const goCommentStep2 = useCallback(() => {
@@ -235,8 +264,24 @@ export function EmbedCommentsApp({
       const html = editorRef.current?.getValues().html ?? "<p></p>";
       setRichDraftHtml(html);
     }
+    setCaptchaToken(null);
+    setCaptchaNonce((n) => n + 1);
     setComposerStep(1);
   }, [name, enableRich, editingId, hostSsoProvisioned]);
+
+  function buildCommentSpamProbeForCaptcha(): string {
+    let plainFromText = "";
+    let plainFromHtml = "";
+    if (enableRich) {
+      const rawHtml = richDraftHtml.trim();
+      plainFromHtml = rawHtml;
+      plainFromText = strippedFromHtml(rawHtml);
+    } else {
+      plainFromText = plainContent.trim();
+    }
+    const attProbe = attachments.map((a) => `${a.filename ?? ""}\t${a.url}`).join("\n");
+    return `${plainFromText}\n${plainFromHtml}\n${attProbe}`;
+  }
 
   function submitComment() {
     setErr("");
@@ -363,6 +408,28 @@ export function EmbedCommentsApp({
       return;
     }
 
+    const attProbe = attachments.map((a) => `${a.filename ?? ""}\t${a.url}`).join("\n");
+    const plainFromTextForCaptcha = typeof body.content === "string" ? body.content : "";
+    const plainFromHtmlForCaptcha = typeof body.html === "string" ? body.html : "";
+    const captchaProbePost = `${plainFromTextForCaptcha}\n${plainFromHtmlForCaptcha}\n${attProbe}`;
+    if (
+      widgetShouldShowTurnstileUi({
+        hasSiteKey: Boolean(captchaSiteKey),
+        mode: captchaMode,
+        trustedPoster,
+        spamProbePlain: captchaProbePost,
+        riskMinLinks: captchaRiskMinLinks,
+        riskMinScore: captchaRiskMinScore,
+      })
+    ) {
+      if (!captchaToken?.trim()) {
+        setErr("Please complete the verification step.");
+        setSubmitting(false);
+        return;
+      }
+      body.captcha_token = captchaToken.trim();
+    }
+
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const tok = getStoredToken(ctx.key);
     if (tok) headers["X-Commenter-Token"] = tok;
@@ -399,6 +466,20 @@ export function EmbedCommentsApp({
 
   const commentStepLabels = ["Profile", "Files"];
   const isEditing = editingId !== null;
+  const captchaProbeForUi =
+    composerOpen && editingId === null && composerStep === 1 ? buildCommentSpamProbeForCaptcha() : "";
+  const showTurnstile =
+    composerOpen &&
+    editingId === null &&
+    composerStep === 1 &&
+    widgetShouldShowTurnstileUi({
+      hasSiteKey: Boolean(captchaSiteKey),
+      mode: captchaMode,
+      trustedPoster,
+      spamProbePlain: captchaProbeForUi,
+      riskMinLinks: captchaRiskMinLinks,
+      riskMinScore: captchaRiskMinScore,
+    });
 
   return (
     <div className="bz-main-stack">
@@ -409,7 +490,7 @@ export function EmbedCommentsApp({
             {loading ? (
               <p className="bz-meta">Loading…</p>
             ) : rows.length ? (
-              <WidgetCommentThread items={rows} variant="comfortable" entryLayout={entryLayout} />
+              <WidgetCommentThread items={rows} variant="comfortable" />
             ) : (
               <p className="bz-meta">No comments yet.</p>
             )}
@@ -445,6 +526,8 @@ export function EmbedCommentsApp({
               setEditingId(null);
               setComposerStep(0);
               setRichDraftHtml("<p></p>");
+              setCaptchaToken(null);
+              setCaptchaNonce((n) => n + 1);
               setComposerOpen(true);
             }}
           >
@@ -492,6 +575,8 @@ export function EmbedCommentsApp({
                     onClick={() => {
                       setErr("");
                       setComposerStep(0);
+                      setCaptchaToken(null);
+                      setCaptchaNonce((n) => n + 1);
                     }}
                     disabled={submitting}
                   >
@@ -655,10 +740,24 @@ export function EmbedCommentsApp({
                   />
                 </div>
               </div>
+              {showTurnstile ? (
+                <div className="bz-form-field">
+                  <span className="bz-l">Verification</span>
+                  <BzTurnstile siteKey={captchaSiteKey} onToken={onCaptchaToken} resetKey={captchaNonce} />
+                </div>
+              ) : null}
             </>
           )}
         </BzComposerModal>
       </div>
+      <BzReportModal
+        open={reportCommentId !== null}
+        onClose={() => setReportCommentId(null)}
+        apiBase={ctx.apiBase}
+        apiKey={ctx.key}
+        variant="comment"
+        targetId={reportCommentId}
+      />
     </div>
   );
 }

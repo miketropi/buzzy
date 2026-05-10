@@ -1,4 +1,3 @@
-import type { EntryLayout } from "@/lib/appearance-presets";
 import { BzAttachmentsDisplay } from "./bz-attachments-display";
 import type { EmbedAttachment } from "./attachment-types";
 import { WidgetStaticStars } from "./bz-stars";
@@ -39,6 +38,7 @@ export function WidgetReviewCard({
   scale = 5,
   meta,
   surface = "raised",
+  onReport,
 }: {
   variant: Variant;
   initials?: string;
@@ -58,8 +58,9 @@ export function WidgetReviewCard({
   scale?: number;
   /** e.g. "Verified · 2h ago" in preview; optional in embed */
   meta?: string;
-  /** `flat`: vertical list rows · `raised`: grid/carousel cards. */
+  /** `flat`: compact list rows · `raised`: elevated card surface. */
   surface?: "raised" | "flat";
+  onReport?: () => void;
 }) {
   const resolvedName = name ?? "Alex M.";
   const initials = initialsProp ?? initialsFromName(resolvedName);
@@ -124,13 +125,20 @@ export function WidgetReviewCard({
             <BzAttachmentsDisplay items={atts} compact={variant === "compact"} />
           ) : null}
           {staffBlock}
+          {onReport ? (
+            <div className="bz-actions-row">
+              <button type="button" className="bz-link" onClick={onReport}>
+                Report
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-/** Live embed + dashboard — list / grid / carousel for review rows. */
+/** Live embed + dashboard — vertical list of review rows. */
 export type ReviewFeedItem = {
   id?: string;
   rating?: number;
@@ -176,95 +184,15 @@ function reviewFeedRowProps(r: ReviewFeedItem) {
 }
 
 export function WidgetReviewFeed({
-  layout,
   reviews,
   scale,
+  onReportReview,
 }: {
-  layout: EntryLayout;
   reviews: ReviewFeedItem[];
   scale: number;
+  onReportReview?: (reviewId: string) => void;
 }) {
   if (!reviews.length) return null;
-
-  if (layout === "card_grid") {
-    return (
-      <div className="bz-grid bz-grid--2">
-        {reviews.map((r, i) => {
-          const {
-            rname,
-            avatarUrl,
-            rt,
-            meta,
-            body,
-            htmlBody,
-            attachments,
-            staffReplyHtml,
-            staffReplyPlain,
-            staffRepliedAt,
-          } = reviewFeedRowProps(r);
-          return (
-            <WidgetReviewCard
-              key={r.id ?? i}
-              variant="comfortable"
-              initials={initialsFromName(rname)}
-              avatarUrl={avatarUrl}
-              name={rname}
-              body={body}
-              htmlBody={htmlBody}
-              attachments={attachments}
-              staffReplyHtml={staffReplyHtml}
-              staffReplyPlain={staffReplyPlain}
-              staffRepliedAt={staffRepliedAt}
-              starRating={rt}
-              scale={scale}
-              meta={meta}
-            />
-          );
-        })}
-      </div>
-    );
-  }
-
-  if (layout === "carousel") {
-    return (
-      <div className="bz-carousel">
-        {reviews.map((r, i) => {
-          const {
-            rname,
-            avatarUrl,
-            rt,
-            meta,
-            body,
-            htmlBody,
-            attachments,
-            staffReplyHtml,
-            staffReplyPlain,
-            staffRepliedAt,
-          } = reviewFeedRowProps(r);
-          return (
-            <div key={r.id ?? i} className="bz-carousel-card">
-              <WidgetReviewCard
-                variant="compact"
-                initials={initialsFromName(rname)}
-                avatarUrl={avatarUrl}
-                name={rname}
-                body={body}
-                htmlBody={htmlBody}
-                attachments={attachments}
-                staffReplyHtml={staffReplyHtml}
-                staffReplyPlain={staffReplyPlain}
-                staffRepliedAt={staffRepliedAt}
-                starRating={rt}
-                scale={scale}
-                meta={meta}
-              />
-              <p className="bz-carousel-label">Review {i + 1}</p>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
 
   return (
     <div className="bz-list bz-stack">
@@ -299,6 +227,7 @@ export function WidgetReviewFeed({
               scale={scale}
               meta={meta}
               surface="flat"
+              onReport={r.id && onReportReview ? () => onReportReview(String(r.id)) : undefined}
             />
           );
         })}

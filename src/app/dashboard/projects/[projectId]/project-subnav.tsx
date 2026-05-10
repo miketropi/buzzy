@@ -3,12 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+function navLinkActiveIndex(pathname: string, links: readonly { href: string }[]): number {
+  let best = -1;
+  let bestLen = -1;
+  links.forEach((t, i) => {
+    if (pathname === t.href || pathname.startsWith(`${t.href}/`)) {
+      if (t.href.length > bestLen) {
+        bestLen = t.href.length;
+        best = i;
+      }
+    }
+  });
+  return best;
+}
+
 export function ProjectSubnav({
   links,
 }: {
   links: readonly { href: string; label: string }[];
 }) {
   const pathname = usePathname();
+  const activeIdx = navLinkActiveIndex(pathname, links);
 
   return (
     <nav
@@ -20,8 +35,8 @@ export function ProjectSubnav({
       }}
     >
       <div className="flex flex-wrap gap-1">
-        {links.map((t) => {
-          const active = pathname === t.href;
+        {links.map((t, i) => {
+          const active = i === activeIdx;
           return (
             <Link
               key={t.href}

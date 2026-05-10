@@ -39,8 +39,34 @@ export function defaultProjectSettings() {
     ssoEnabled: false,
     ssoSecretKey: null as string | null,
     enableSpamFilter: true,
+    /** When true, blocked phrases use word boundaries (fewer false positives than raw substring). */
+    spamMatchWholeWords: false,
+    /** Reject posts whose text has more than this many http(s)/www links; 0 = off. */
+    spamMaxUrlsPerPost: 0,
+    /** Extra case-insensitive RegExp checks (one pattern per entry; invalid patterns are skipped). */
+    spamBlockedRegex: [] as string[],
+    /** If > 0, block the same normalized body on the same page within this many seconds. */
+    spamDuplicateWindowSeconds: 0,
+    /** Per commenter + project rate limit (Redis), in addition to per-IP caps; 0 = off. */
+    spamPerIdentityCommentLimit: 0,
+    spamPerIdentityReviewLimit: 0,
+    /** Sliding window (seconds) used with the per-identity limits above. */
+    spamPerIdentityWindowSeconds: 3600,
     blockedWords: [] as string[],
     blockedIPs: [] as string[],
+    /** Akismet comment-check (API key stored server-side only). */
+    akismetEnabled: false,
+    akismetApiKey: null as string | null,
+    akismetBlogUrl: null as string | null,
+    akismetRejectSpam: false,
+    captchaProvider: "off" as string,
+    captchaSiteKey: null as string | null,
+    captchaSecretKey: null as string | null,
+    captchaMode: "anonymous_only" as string,
+    captchaRiskMinLinks: 4,
+    captchaRiskMinScore: 0.55,
+    /** Uses `OPENAI_API_KEY` on the server; results are advisory JSON on each post. */
+    openaiModerationEnabled: false,
     locale: "en",
   };
 }

@@ -67,10 +67,12 @@ model Project {
 
   owner      User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   apiKeys    ApiKey[]
-  comments   Comment[]
-  reviews    Review[]
-  commenters Commenter[]
-  pages      Page[]
+  comments           Comment[]
+  reviews            Review[]
+  commenters         Commenter[]
+  pages              Page[]
+  moderationAuditLogs ModerationAuditLog[]
+  appeals           Appeal[]
 
   @@index([ownerId])
   @@map("projects")
@@ -145,7 +147,9 @@ model Comment {
   htmlContent   String?   @db.Text
   /// JSON array: `{ kind, url, filename?, content_type? }[]` — images, videos, documents (not inline in html)
   attachments   Json?
-  status        String    @default("approved")
+  status            String @default("approved")
+  /// Normalized-body SHA-256 for duplicate detection (spam heuristics).
+  duplicateBodyHash String? @map("duplicate_body_hash") @db.VarChar(64)
   /// Client IP at create time (from trusted proxy headers) — for moderation / analytics.
   submitterIp  String?   @map("submitter_ip") @db.VarChar(64)
   depth         Int       @default(0)
@@ -153,6 +157,7 @@ model Comment {
   downvotes     Int       @default(0)
   isPinned      Boolean   @default(false)
   editedAt      DateTime?
+  advisorySignals Json?   @map("advisory_signals")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -165,6 +170,7 @@ model Comment {
   reports   Report[]
 
   @@index([projectId, pageId, status])
+  @@index([projectId, pageId, duplicateBodyHash])
   @@index([parentId])
   @@index([commenterId])
   @@index([createdAt])
@@ -183,7 +189,9 @@ model Review {
   htmlContent     String?   @db.Text
   /// JSON array: `{ kind, url, filename?, content_type? }[]` — uploads listed outside the rich-text body
   attachments     Json?
-  status          String    @default("approved")
+  status             String @default("approved")
+  /// Normalized-body SHA-256 for duplicate detection (spam heuristics).
+  duplicateBodyHash  String? @map("duplicate_body_hash") @db.VarChar(64)
   /// Client IP at create time (from trusted proxy headers) — for moderation / analytics.
   submitterIp       String?   @map("submitter_ip") @db.VarChar(64)
   isVerified      Boolean   @default(false)
@@ -195,6 +203,7 @@ model Review {
   staffReplyContent String? @db.Text
   staffReplyHtml    String? @db.Text
   staffRepliedAt    DateTime?
+  advisorySignals   Json? @map("advisory_signals")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -206,6 +215,7 @@ model Review {
 
   @@unique([projectId, pageId, commenterId])
   @@index([projectId, pageId, status])
+  @@index([projectId, pageId, duplicateBodyHash])
   @@index([commenterId])
   @@index([rating])
   @@index([createdAt])
@@ -246,4 +256,39 @@ model Report {
   @@index([reviewId])
   @@index([status])
   @@map("reports")
+}
+
+model ModerationAuditLog {
+  id           String    @id @default(uuid())
+  projectId    String
+  actorUserId  String? /// Dashboard user performing the action, null when system-only.
+  action       String    @db.VarChar(96)
+  entityType   String    @db.VarChar(32)
+  entityId     String    @db.VarChar(48)
+  details      Json?
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("moderation_audit_logs")
+}
+
+model Appeal {
+  id         String @id @default(uuid())
+  projectId  String
+  commentId  String?
+  reviewId   String?
+  email      String?  @db.VarChar(320)
+  message    String   @db.Text
+  status     String   @default("open")
+  reviewedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([commentId])
+  @@index([reviewId])
+  @@map("appeals")
 }

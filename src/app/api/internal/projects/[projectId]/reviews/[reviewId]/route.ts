@@ -1,10 +1,11 @@
 import type { NextRequest } from "next/server";
 
+import { isUuid, requireOwnerId, requireProjectOwned } from "@/lib/internal/project-access";
 import { prisma } from "@/lib/prisma";
-import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/project-access";
+import { writeModerationAuditLog } from "@/lib/internal/moderation-audit";
 import { recalculatePageRatingSummary } from "@/lib/public-api/rating-summary";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
-import { matchesSpamPatterns } from "@/lib/public-api/spam";
+import { getSpamBlockReasonForText } from "@/lib/public-api/spam";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
 import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
@@ -121,8 +122,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
 
       const spamProbe = `${plain}\n${htmlContent ?? ""}`;
-      if (matchesSpamPatterns(spamProbe, settings)) {
-        throw new ValidationError("This message was blocked by the spam filter");
+      const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+      if (spamReason) {
+        throw new ValidationError(spamReason);
       }
 
       data.staffReplyContent = plain;
@@ -141,6 +143,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (patch.status !== undefined) {
       await recalculatePageRatingSummary(updated.pageId, settings.ratingScale);
+      await writeModerationAuditLog({
+        projectId,
+        actorUserId: ownerId,
+        action: `review_${patch.status}`,
+        entityType: "review",
+        entityId: reviewId,
+        details: { from: existing.status, to: patch.status },
+      });
     }
 
     return jsonSuccess({ review: serializeReview(updated) });

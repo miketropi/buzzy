@@ -10,12 +10,12 @@ export function buildPublicWidgetConfig(project: Project, settings: EffectivePro
     theme: settings.theme,
     primary_color: settings.primaryColor,
     color_preset: settings.colorPreset,
-    entry_layout: settings.entryLayout,
+    entry_layout: "list",
     border_radius: settings.borderRadius,
     font_family: settings.useHostTypography ? null : settings.fontFamily,
     use_host_typography: settings.useHostTypography,
     submit_button_style: settings.submitButtonStyle,
-    composer_text_scale: settings.composerTextScale,
+    composer_text_scale: "md",
     ...(typeof settings.submitButtonFgColor === "string" && settings.submitButtonFgColor
       ? { submit_button_fg_color: settings.submitButtonFgColor }
       : {}),
@@ -28,6 +28,20 @@ export function buildPublicWidgetConfig(project: Project, settings: EffectivePro
     enable_rating: settings.enableRating,
     require_rating_text: settings.requireRatingText,
     uploads_configured: isR2UploadConfigured(),
+    ...(settings.captchaProvider === "turnstile" && settings.captchaSiteKey?.trim()
+      ? {
+          captcha_site_key: settings.captchaSiteKey.trim(),
+          captcha_mode: settings.captchaMode ?? "anonymous_only",
+          ...(typeof settings.captchaRiskMinLinks === "number" &&
+          Number.isFinite(settings.captchaRiskMinLinks)
+            ? { captcha_risk_min_links: settings.captchaRiskMinLinks }
+            : {}),
+          ...(typeof settings.captchaRiskMinScore === "number" &&
+          Number.isFinite(settings.captchaRiskMinScore)
+            ? { captcha_risk_min_score: settings.captchaRiskMinScore }
+            : {}),
+        }
+      : {}),
     features: {
       allow_anonymous: settings.allowAnonymous,
       allow_guest_email: settings.allowGuestEmail,

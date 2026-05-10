@@ -17,6 +17,7 @@ export function BzComposerModal({
   stepLabels,
   children,
   footer,
+  shortcutHints = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,6 +27,8 @@ export function BzComposerModal({
   stepLabels: string[];
   children: ReactNode;
   footer: ReactNode;
+  /** When false, omits Esc / step hint strip (e.g. single-purpose dialogs). */
+  shortcutHints?: boolean;
 }) {
   const titleId = useId();
   const hintsId = useId();
@@ -174,7 +177,7 @@ export function BzComposerModal({
           stepLabels={stepLabels}
           sheetRef={sheetRef}
           onClose={onClose}
-          describedBy={hintsId}
+          describedBy={shortcutHints ? hintsId : undefined}
           footer={footer}
         >
           {children}

@@ -9,21 +9,27 @@ import { findOrCreatePage, findPageByProjectAndUrl } from "@/lib/public-api/page
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import {
   assertCommentPostRateLimit,
+  assertCommentPostRateLimitForIdentity,
   clientIp,
   submitterIpFromRequest,
 } from "@/lib/public-api/rate-limit-request";
 import { resolveAnonymousCommenterId } from "@/lib/public-api/resolve-anonymous-commenter";
 import { resolveSessionCommenterId } from "@/lib/public-api/resolve-session-commenter";
+import { isTrustedWidgetPoster } from "@/lib/public-api/widget-poster-trust";
 import { runPublicApi } from "@/lib/public-api/handler";
 import {
   assertAttachmentsFromR2,
   attachmentsSpamProbe,
 } from "@/lib/public-api/attachments";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
+import { domainsFromJson } from "@/lib/json-domains";
 import {
-  isBlockedIp,
-  matchesSpamPatterns,
-} from "@/lib/public-api/spam";
+  assertNoRecentDuplicateComment,
+  duplicateBodyFingerprint,
+} from "@/lib/public-api/content-duplicate";
+import { buildContentAdvisoryPayload } from "@/lib/public-api/content-advisory";
+import { assertTurnstileCaptchaIfNeeded } from "@/lib/public-api/captcha-gate";
+import { getSpamBlockReasonForText, isBlockedIp } from "@/lib/public-api/spam";
 import {
   applyYourVotesToTree,
   collectCommentIdsFromTree,
@@ -111,8 +117,19 @@ export async function POST(request: NextRequest) {
     const plainFromText = sanitizeCommentContent(body.content ?? "");
     const plainFromHtml = body.html ? sanitizeCommentContent(body.html) : "";
     const spamProbe = `${plainFromText}\n${plainFromHtml}\n${attachmentsSpamProbe(attachmentList)}`;
-    if (matchesSpamPatterns(spamProbe, settings)) {
-      throw new ValidationError("This message was blocked by the spam filter");
+
+    const trustedPoster = isTrustedWidgetPoster(ctx.request, ctx.project);
+    await assertTurnstileCaptchaIfNeeded(
+      settings,
+      ctx.request,
+      body.captcha_token,
+      trustedPoster,
+      spamProbe,
+    );
+
+    const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+    if (spamReason) {
+      throw new ValidationError(spamReason);
     }
 
     let htmlContent: string | null = null;
@@ -170,6 +187,37 @@ export async function POST(request: NextRequest) {
 
     const commenterId = await resolveAnonymousCommenterId(ctx, body, settings);
 
+    await assertCommentPostRateLimitForIdentity(ctx.project.id, commenterId, settings);
+
+    const dupWindow =
+      typeof settings.spamDuplicateWindowSeconds === "number" &&
+      Number.isFinite(settings.spamDuplicateWindowSeconds)
+        ? Math.min(604800, Math.max(0, Math.floor(settings.spamDuplicateWindowSeconds)))
+        : 0;
+    const dupHash = duplicateBodyFingerprint(content);
+    await assertNoRecentDuplicateComment({
+      projectId: ctx.project.id,
+      pageId: page.id,
+      fingerprint: dupHash,
+      windowSeconds: dupWindow,
+    });
+
+    const firstHost = domainsFromJson(ctx.project.allowedDomains)[0];
+    const { advisory, rejectForAkismet } = await buildContentAdvisoryPayload({
+      request: ctx.request,
+      settings,
+      projectId: ctx.project.id,
+      firstAllowedDomain: firstHost,
+      pageUrl: body.page_url,
+      bodyText: `${content}\n${htmlContent ?? ""}`.slice(0, 100_000),
+      authorName: body.commenter.name,
+      authorEmail: body.commenter.email?.trim() || null,
+      kind: "comment",
+    });
+    if (rejectForAkismet) {
+      throw new ValidationError("This message could not be posted (spam check).");
+    }
+
     const status = settings.requireApproval ? "pending" : "approved";
 
     const comment = await prisma.comment.create({
@@ -184,6 +232,8 @@ export async function POST(request: NextRequest) {
         status,
         depth,
         submitterIp: submitterIpFromRequest(request),
+        duplicateBodyHash: dupHash || undefined,
+        advisorySignals: advisory,
       },
       include: {
         commenter: { select: { name: true, avatar: true } },

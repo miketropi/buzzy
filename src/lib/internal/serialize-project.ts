@@ -7,10 +7,12 @@ export function toProjectResponse(project: Project) {
   const s = project.settings;
   let settings: Record<string, unknown> | null = null;
   if (s && typeof s === "object") {
-    const { ssoSecretKey: _ignored, ...rest } = s as Record<string, unknown> & {
-      ssoSecretKey?: string | null;
-    };
-    settings = { ...rest, hasSsoSecret: Boolean(_ignored) };
+    const secretKeys = ["ssoSecretKey", "akismetApiKey", "captchaSecretKey"] as const;
+    const rest = { ...(s as Record<string, unknown>) };
+    for (const k of secretKeys) {
+      delete rest[k];
+    }
+    settings = { ...rest, hasSsoSecret: Boolean((s as Record<string, unknown>).ssoSecretKey) };
   }
   return {
     id: project.id,

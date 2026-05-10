@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const messageStatusFilterSchema = z.enum(["pending", "approved", "deleted", "all"]).optional();
+export const messageStatusFilterSchema = z.enum(["pending", "approved", "spam", "deleted", "all"]).optional();
 
 export const listInternalMessagesQuerySchema = z.object({
   status: messageStatusFilterSchema,
@@ -9,7 +9,7 @@ export const listInternalMessagesQuerySchema = z.object({
 });
 
 export const patchMessageStatusBodySchema = z.object({
-  status: z.enum(["pending", "approved", "deleted"]),
+  status: z.enum(["pending", "approved", "spam", "deleted"]),
 });
 
 export const staffReplyCommentBodySchema = z
@@ -32,7 +32,7 @@ export const staffReplyCommentBodySchema = z
 
 export const patchReviewAdminBodySchema = z
   .object({
-    status: z.enum(["pending", "approved", "deleted"]).optional(),
+    status: z.enum(["pending", "approved", "spam", "deleted"]).optional(),
     clearStaffReply: z.boolean().optional(),
     staffReplyContent: z.string().max(20_000).optional(),
     staffReplyHtml: z.string().max(120_000).optional(),

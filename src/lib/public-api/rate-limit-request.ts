@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import type { EffectiveProjectSettings } from "@/lib/public-api/project-settings";
 import { rateLimit } from "@/lib/rate-limit";
 import { RateLimitError } from "@/lib/utils/errors";
 
@@ -80,4 +81,51 @@ export async function assertUploadRateLimit(request: NextRequest) {
     rateLimitEnv("RATE_LIMIT_UPLOADS", 30),
     3600,
   );
+}
+
+function nonNegIntSetting(v: unknown, max: number): number {
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return 0;
+  return Math.min(max, Math.floor(v));
+}
+
+function identityWindowSec(settings: EffectiveProjectSettings): number {
+  const w = settings.spamPerIdentityWindowSeconds;
+  if (typeof w !== "number" || !Number.isFinite(w)) return 3600;
+  return Math.min(604800, Math.max(60, Math.floor(w)));
+}
+
+/** Extra cap per visitor identity (Redis), on top of per-IP limits. */
+export async function assertCommentPostRateLimitForIdentity(
+  projectId: string,
+  commenterId: string,
+  settings: EffectiveProjectSettings,
+): Promise<void> {
+  const limit = nonNegIntSetting(settings.spamPerIdentityCommentLimit, 500);
+  if (limit <= 0) return;
+  await assertRateLimit(
+    "comments:id",
+    `${projectId}:${commenterId}`,
+    limit,
+    identityWindowSec(settings),
+  );
+}
+
+export async function assertReviewPostRateLimitForIdentity(
+  projectId: string,
+  commenterId: string,
+  settings: EffectiveProjectSettings,
+): Promise<void> {
+  const limit = nonNegIntSetting(settings.spamPerIdentityReviewLimit, 500);
+  if (limit <= 0) return;
+  await assertRateLimit(
+    "reviews:id",
+    `${projectId}:${commenterId}`,
+    limit,
+    identityWindowSec(settings),
+  );
+}
+
+export async function assertAppealRateLimit(request: NextRequest) {
+  const ip = clientIp(request);
+  await assertRateLimit("appeals", ip, rateLimitEnv("RATE_LIMIT_APPEALS", 5), 3600);
 }

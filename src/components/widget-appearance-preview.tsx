@@ -3,12 +3,10 @@
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useId, useMemo, useSyncExternalStore } from "react";
-import type { EntryLayout } from "@/lib/appearance-presets";
 import { WIDGET_CHROME_STRUCTURAL_SCOPED } from "@/lib/generated/widget-chrome-scoped";
 import {
   buildScopedWidgetStylesheet,
   dashboardToTokenInput,
-  type ComposerTextScale,
   type SubmitButtonStyle,
 } from "@/lib/widget-chrome-tokens";
 import type { PublicWidgetMode } from "@/lib/widget-mode-ux";
@@ -70,10 +68,8 @@ export function WidgetAppearancePreview({
   fontFamily,
   useHostTypography,
   submitButtonStyle,
-  composerTextScale,
   submitButtonFgColor,
   mutedTextColor,
-  entryLayout,
 }: {
   widgetMode: PublicWidgetMode;
   theme: string;
@@ -82,13 +78,10 @@ export function WidgetAppearancePreview({
   fontFamily: string;
   useHostTypography: boolean;
   submitButtonStyle: SubmitButtonStyle;
-  composerTextScale: ComposerTextScale;
   /** Normalized #RRGGBB or null (auto label on solid fills). */
   submitButtonFgColor: string | null;
   mutedTextColor: string | null;
-  entryLayout: string;
 }) {
-  const layout = (["list", "card_grid", "carousel"].includes(entryLayout) ? entryLayout : "list") as EntryLayout;
   const prefersDark = usePrefersDarkSnapshot();
   const surface =
     theme === "auto" ? (prefersDark ? "dark" : "light") : resolvePreviewSurface(theme);
@@ -282,7 +275,7 @@ export function WidgetAppearancePreview({
           useHostTypography,
           prefersDark,
           submitButtonStyle,
-          composerTextScale,
+          "md",
           submitButtonFgColor,
           mutedTextColor,
         ),
@@ -296,7 +289,6 @@ export function WidgetAppearancePreview({
       useHostTypography,
       prefersDark,
       submitButtonStyle,
-      composerTextScale,
       submitButtonFgColor,
       mutedTextColor,
     ],
@@ -351,40 +343,7 @@ export function WidgetAppearancePreview({
     { initials: "ER", name: "Eli R.", body: "Does what it says on the tin.", stars: 4 },
   ];
 
-  const gridData = [
-    { initials: "AM", name: "Alex M.", body: "Shipped fast and docs were clear. Happy with the integration path." },
-    { initials: "SK", name: "Sam K.", body: "Star ratings and comments in one block — exactly what we needed for PDP." },
-    { initials: "JL", name: "Jordan L.", body: "Moderation hooks feel production-ready. Origin checks gave us confidence." },
-    { initials: "ER", name: "Eli R.", body: "Carousel layout works well above the fold on our landing experiments." },
-  ];
-
-  function buildCommentEntries(variant: "comfortable" | "compact"): ReactNode {
-    if (layout === "card_grid") {
-      return (
-        <div className="bz-grid bz-grid--2">
-          {gridData.map((row) => (
-            <WidgetCommentCard key={row.initials + row.name} variant={variant} initials={row.initials} name={row.name} body={row.body} />
-          ))}
-        </div>
-      );
-    }
-    if (layout === "carousel") {
-      return (
-        <div>
-          <p className="bz-carousel-hint">
-            Swipe or scroll horizontally — cards use most of the widget width on smaller breakpoints.
-          </p>
-          <div className="bz-carousel">
-            {gridData.slice(0, 3).map((row, i) => (
-              <div key={row.name} className="bz-carousel-card">
-                <WidgetCommentCard variant="compact" initials={row.initials} name={row.name} body={row.body} />
-                <p className="bz-carousel-label">Card {i + 1}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
+  function buildCommentEntries(): ReactNode {
     return (
       <div className="bz-list">
         <div className="bz-entry-list-group">
@@ -396,43 +355,7 @@ export function WidgetAppearancePreview({
     );
   }
 
-  function buildReviewEntries(variant: "comfortable" | "compact"): ReactNode {
-    if (layout === "card_grid") {
-      return (
-        <div className="bz-grid bz-grid--2">
-          {reviewGridData.map((row) => (
-            <WidgetReviewCard
-              key={row.initials + row.name}
-              variant={variant}
-              initials={row.initials}
-              name={row.name}
-              body={row.body}
-              starRating={row.stars}
-              scale={scale}
-            />
-          ))}
-        </div>
-      );
-    }
-    if (layout === "carousel") {
-      return (
-        <div className="bz-carousel">
-          {reviewGridData.slice(0, 3).map((row, i) => (
-            <div key={row.name} className="bz-carousel-card">
-              <WidgetReviewCard
-                variant="compact"
-                initials={row.initials}
-                name={row.name}
-                body={row.body}
-                starRating={row.stars}
-                scale={scale}
-              />
-              <p className="bz-carousel-label">Card {i + 1}</p>
-            </div>
-          ))}
-        </div>
-      );
-    }
+  function buildReviewEntries(): ReactNode {
     return (
       <div className="bz-list">
         <div className="bz-entry-list-group">
@@ -453,9 +376,6 @@ export function WidgetAppearancePreview({
     );
   }
 
-  const sectionTitleSuffix =
-    layout === "list" ? "" : layout === "card_grid" ? " · card grid" : " · carousel";
-
   function threadPanel(opts: { title: string; entries: ReactNode; footer: ReactNode }) {
     return (
       <div className="bz-embed-section">
@@ -471,8 +391,8 @@ export function WidgetAppearancePreview({
     mainBlocks = (
       <>
         {threadPanel({
-          title: `Comments${sectionTitleSuffix}`,
-          entries: buildCommentEntries(layout === "card_grid" ? "comfortable" : layout === "carousel" ? "compact" : "comfortable"),
+          title: "Comments",
+          entries: buildCommentEntries(),
           footer: inlineComposerBlock({
             ctaLabel: "Write a comment",
             modalTitle: "Post a comment",
@@ -489,8 +409,8 @@ export function WidgetAppearancePreview({
       <>
         {ratingSummaryBlock}
         {threadPanel({
-          title: `Reviews${sectionTitleSuffix}`,
-          entries: buildReviewEntries(layout === "card_grid" ? "comfortable" : layout === "carousel" ? "compact" : "comfortable"),
+          title: "Reviews",
+          entries: buildReviewEntries(),
           footer: inlineComposerBlock({
             ctaLabel: "Write a review",
             modalTitle: "Write a review",
@@ -507,8 +427,8 @@ export function WidgetAppearancePreview({
       <>
         {compactRatingBlock}
         {threadPanel({
-          title: `Ratings${sectionTitleSuffix}`,
-          entries: buildReviewEntries(layout === "card_grid" ? "comfortable" : layout === "carousel" ? "compact" : "comfortable"),
+          title: "Ratings",
+          entries: buildReviewEntries(),
           footer: inlineComposerBlock({
             ctaLabel: "Rate this",
             modalTitle: "Send a rating",
@@ -558,7 +478,7 @@ export function WidgetAppearancePreview({
 
           <div className="buzzy-widget-scope">
             <style dangerouslySetInnerHTML={{ __html: chromeSheet }} />
-            <div className={`bz bz-btn-style--${submitButtonStyle} bz-text-scale--${composerTextScale}`}>
+            <div className={`bz bz-btn-style--${submitButtonStyle} bz-text-scale--md`}>
               <div className="bz-main-stack">{mainBlocks}</div>
             </div>
           </div>

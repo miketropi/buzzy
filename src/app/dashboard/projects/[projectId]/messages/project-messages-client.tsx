@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StaffReplyEditor, staffReplyInitialHtml, type StaffReplyEditorRef } from "@/components/staff-reply-editor";
 
-type StatusFilter = "all" | "pending" | "approved" | "deleted";
+type StatusFilter = "all" | "pending" | "approved" | "spam" | "deleted";
 
 type InboxCommenter = {
   name: string;
@@ -629,7 +629,7 @@ export function ProjectMessagesClient({
     void load();
   }, [load]);
 
-  async function patchComment(id: string, next: StatusFilter) {
+  async function patchComment(id: string, next: Exclude<StatusFilter, "all">) {
     setErr("");
     const res = await fetch(`/api/internal/projects/${projectId}/comments/${id}`, {
       method: "PATCH",
@@ -645,7 +645,7 @@ export function ProjectMessagesClient({
     await load();
   }
 
-  async function patchReview(id: string, next: StatusFilter) {
+  async function patchReview(id: string, next: Exclude<StatusFilter, "all">) {
     setErr("");
     const res = await fetch(`/api/internal/projects/${projectId}/reviews/${id}`, {
       method: "PATCH",
@@ -801,6 +801,7 @@ export function ProjectMessagesClient({
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
+            <option value="spam">Spam</option>
             <option value="deleted">Deleted / hidden</option>
             <option value="all">All</option>
           </select>
@@ -894,6 +895,15 @@ export function ProjectMessagesClient({
                             Approve
                           </button>
                         ) : null}
+                        {c.status !== "spam" && c.status !== "deleted" ? (
+                          <button
+                            type="button"
+                            className="rounded-md bg-amber-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-800"
+                            onClick={() => void patchComment(c.id, "spam")}
+                          >
+                            Spam
+                          </button>
+                        ) : null}
                         {c.status !== "deleted" ? (
                           <button
                             type="button"
@@ -903,7 +913,7 @@ export function ProjectMessagesClient({
                             Hide
                           </button>
                         ) : null}
-                        {c.status !== "pending" && c.status !== "deleted" ? (
+                        {c.status !== "pending" && c.status !== "deleted" && c.status !== "spam" ? (
                           <button
                             type="button"
                             className="rounded-md border border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/50"
@@ -995,6 +1005,15 @@ export function ProjectMessagesClient({
                             Approve
                           </button>
                         ) : null}
+                        {r.status !== "spam" && r.status !== "deleted" ? (
+                          <button
+                            type="button"
+                            className="rounded-md bg-amber-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-800"
+                            onClick={() => void patchReview(r.id, "spam")}
+                          >
+                            Spam
+                          </button>
+                        ) : null}
                         {r.status !== "deleted" ? (
                           <button
                             type="button"
@@ -1004,7 +1023,7 @@ export function ProjectMessagesClient({
                             Hide
                           </button>
                         ) : null}
-                        {r.status !== "pending" && r.status !== "deleted" ? (
+                        {r.status !== "pending" && r.status !== "deleted" && r.status !== "spam" ? (
                           <button
                             type="button"
                             className="rounded-md border border-amber-300 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/50"

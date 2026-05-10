@@ -9,6 +9,8 @@ function tabLinks(projectId: string) {
   return [
     { href: base, label: "Overview" },
     { href: `${base}/messages`, label: "Messages" },
+    { href: `${base}/reports`, label: "Reports" },
+    { href: `${base}/appeals`, label: "Appeals" },
     { href: `${base}/settings`, label: "Settings" },
     { href: `${base}/api-keys`, label: "API keys" },
     { href: `${base}/how-to-use`, label: "How to use" },

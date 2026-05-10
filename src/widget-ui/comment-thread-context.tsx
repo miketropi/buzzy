@@ -18,6 +18,8 @@ export type CommentThreadContextValue = {
   voteBusyId: string | null;
   /** When set, thread entries may show Edit for comments where `can_edit` is true. */
   onEdit?: (c: CommentForEdit) => void;
+  /** When set, thread entries show a Report control (public API — no login required). */
+  onReport?: (commentId: string) => void;
   /** False when guest comments are disabled and the viewer has no device token or Host SSO — Reply/Quote should be off. */
   canCompose: boolean;
 };

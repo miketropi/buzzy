@@ -14,8 +14,10 @@ import {
 import { recalculatePageRatingSummary } from "@/lib/public-api/rating-summary";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
 import {
-  matchesSpamPatterns,
-} from "@/lib/public-api/spam";
+  assertNoRecentDuplicateReview,
+  reviewDuplicateFingerprint,
+} from "@/lib/public-api/content-duplicate";
+import { getSpamBlockReasonForText } from "@/lib/public-api/spam";
 import { singlePublicReview } from "@/lib/public-api/serialize-review";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
 import { jsonSuccess } from "@/lib/utils/response";
@@ -76,11 +78,6 @@ export async function PATCH(request: NextRequest, context: RouteCtx) {
         ? parseCategoryRatingsForPatch(patch.category_ratings, scale, settings.ratingCategories)
         : undefined;
 
-    const spamProbe = `${patch.title ?? ""}\n${patch.content ?? ""}\n${patch.html ?? ""}`;
-    if (spamProbe.trim() && matchesSpamPatterns(spamProbe, settings)) {
-      throw new ValidationError("This message was blocked by the spam filter");
-    }
-
     const title =
       patch.title !== undefined
         ? patch.title
@@ -95,6 +92,13 @@ export async function PATCH(request: NextRequest, context: RouteCtx) {
     if (title !== undefined) {
       data.title = title;
     }
+
+    let resolvedTitle = review.title;
+    if (title !== undefined) {
+      resolvedTitle = title;
+    }
+    let resolvedContent = review.content;
+    let resolvedHtmlContent = review.htmlContent;
 
     if (patch.content !== undefined || patch.html !== undefined) {
       let nextHtml: string | null;
@@ -131,11 +135,40 @@ export async function PATCH(request: NextRequest, context: RouteCtx) {
 
       data.content = nextContent;
       data.htmlContent = nextHtml;
+      resolvedContent = nextContent;
+      resolvedHtmlContent = patch.html !== undefined ? nextHtml : null;
     }
     if (catParsed !== undefined) {
       data.categoryRatings = catParsed === Prisma.JsonNull ? Prisma.JsonNull : catParsed;
     }
     data.editedAt = new Date();
+
+    const textTouched =
+      patch.title !== undefined || patch.content !== undefined || patch.html !== undefined;
+    if (textTouched) {
+      const spamProbe = `${resolvedTitle ?? ""}\n${resolvedContent ?? ""}\n${resolvedHtmlContent ?? ""}`;
+      const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+      if (spamReason) {
+        throw new ValidationError(spamReason);
+      }
+
+      const dupWindow =
+        typeof settings.spamDuplicateWindowSeconds === "number" &&
+        Number.isFinite(settings.spamDuplicateWindowSeconds)
+          ? Math.min(604800, Math.max(0, Math.floor(settings.spamDuplicateWindowSeconds)))
+          : 0;
+      const dupHash = reviewDuplicateFingerprint(resolvedTitle, resolvedContent);
+      if (dupHash) {
+        await assertNoRecentDuplicateReview({
+          projectId: ctx.project.id,
+          pageId: review.pageId,
+          fingerprint: dupHash,
+          windowSeconds: dupWindow,
+          excludeReviewId: reviewId,
+        });
+      }
+      data.duplicateBodyHash = dupHash || null;
+    }
 
     const updated = await prisma.review.update({
       where: { id: reviewId },

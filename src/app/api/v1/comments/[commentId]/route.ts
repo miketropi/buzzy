@@ -9,7 +9,11 @@ import { runPublicApi } from "@/lib/public-api/handler";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { assertRequestActsAsCommenter } from "@/lib/public-api/resolve-session-commenter";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
-import { matchesSpamPatterns } from "@/lib/public-api/spam";
+import {
+  assertNoRecentDuplicateComment,
+  duplicateBodyFingerprint,
+} from "@/lib/public-api/content-duplicate";
+import { getSpamBlockReasonForText } from "@/lib/public-api/spam";
 import { singlePublicComment } from "@/lib/public-api/serialize-comment";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
 import { jsonSuccess } from "@/lib/utils/response";
@@ -70,10 +74,6 @@ export async function PATCH(request: NextRequest, context: RouteCtx) {
 
     const plainFromText = contentIn !== undefined ? sanitizeCommentContent(contentIn) : "";
     const plainFromHtml = htmlIn !== undefined && htmlIn.trim() ? sanitizeCommentContent(htmlIn) : "";
-    const spamProbe = `${plainFromText}\n${plainFromHtml}`;
-    if (matchesSpamPatterns(spamProbe, settings)) {
-      throw new ValidationError("This message was blocked by the spam filter");
-    }
 
     let content = (plainFromText || plainFromHtml).trim();
     if (!content && htmlContent) {
@@ -94,9 +94,29 @@ export async function PATCH(request: NextRequest, context: RouteCtx) {
       throw new ValidationError("Content is empty after sanitization");
     }
 
+    const spamProbe = `${content}\n${htmlContent ?? ""}`;
+    const spamReason = getSpamBlockReasonForText(spamProbe, settings);
+    if (spamReason) {
+      throw new ValidationError(spamReason);
+    }
+
+    const dupWindow =
+      typeof settings.spamDuplicateWindowSeconds === "number" &&
+      Number.isFinite(settings.spamDuplicateWindowSeconds)
+        ? Math.min(604800, Math.max(0, Math.floor(settings.spamDuplicateWindowSeconds)))
+        : 0;
+    const dupHash = duplicateBodyFingerprint(content);
+    await assertNoRecentDuplicateComment({
+      projectId: ctx.project.id,
+      pageId: comment.pageId,
+      fingerprint: dupHash,
+      windowSeconds: dupWindow,
+      excludeCommentId: commentId,
+    });
+
     const updated = await prisma.comment.update({
       where: { id: commentId },
-      data: { content, htmlContent, editedAt: new Date() },
+      data: { content, htmlContent, editedAt: new Date(), duplicateBodyHash: dupHash || null },
       include: { commenter: { select: { name: true, avatar: true } } },
     });
 

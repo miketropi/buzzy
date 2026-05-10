@@ -30,6 +30,7 @@ export const createReviewBodySchema = z.object({
   html: z.string().max(120_000).optional(),
   attachments: attachmentsPayloadSchema.optional(),
   commenter: commenterAnonymousSchema,
+  captcha_token: z.string().max(4096).optional(),
 });
 
 export const patchReviewBodySchema = z.object({

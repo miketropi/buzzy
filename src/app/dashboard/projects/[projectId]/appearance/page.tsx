@@ -5,5 +5,5 @@ export default function ProjectAppearanceRedirectPage({
 }: {
   params: { projectId: string };
 }) {
-  redirect(`/dashboard/projects/${params.projectId}/settings`);
+  redirect(`/dashboard/projects/${params.projectId}/settings/appearance`);
 }

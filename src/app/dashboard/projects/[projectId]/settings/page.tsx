@@ -1,28 +1,10 @@
+import { SlidersHorizontal } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { COLOR_PRESETS, type ColorPresetId } from "@/lib/appearance-presets";
-import { normalizeHexRgb } from "@/lib/contrast-color";
-import { domainsFromJson } from "@/lib/json-domains";
-import { prisma } from "@/lib/prisma";
-import { defaultProjectSettings } from "@/lib/project-defaults";
-import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
-import { SettingsAndAppearanceClient } from "./settings-and-appearance-client";
+import { loadProjectSettingsPageDataForOwner } from "./project-settings-data";
+import { ProjectSettingsForm } from "./project-settings-form";
 
-function storedHex(raw: Record<string, unknown>, key: string): string | null {
-  const v = raw[key];
-  if (typeof v !== "string") return null;
-  return normalizeHexRgb(v.trim());
-}
-
-function inferPresetFromPrimary(hex: string): ColorPresetId {
-  const norm = hex.trim().toLowerCase();
-  for (const p of COLOR_PRESETS) {
-    if (p.id !== "custom" && p.primary.toLowerCase() === norm) return p.id;
-  }
-  return "custom";
-}
-
-export default async function ProjectSettingsPage({
+export default async function ProjectSettingsGeneralPage({
   params,
 }: {
   params: { projectId: string };
@@ -32,90 +14,61 @@ export default async function ProjectSettingsPage({
     redirect("/login");
   }
 
-  const project = await prisma.project.findFirst({
-    where: { id: params.projectId, ownerId: session.user.id },
-    select: {
-      id: true,
-      name: true,
-      widgetMode: true,
-      allowedDomains: true,
-      settings: true,
-    },
+  const data = await loadProjectSettingsPageDataForOwner({
+    projectId: params.projectId,
+    ownerUserId: session.user.id,
   });
 
-  if (!project) {
+  if (!data) {
     notFound();
   }
 
-  const domainsText = domainsFromJson(project.allowedDomains).join("\n");
-
-  const defs = defaultProjectSettings();
-  const raw =
-    project.settings && typeof project.settings === "object"
-      ? (project.settings as unknown as Record<string, unknown>)
-      : {};
-
-  const str = (k: string, fallback: string) => {
-    const v = raw[k];
-    return typeof v === "string" ? v : fallback;
-  };
-
-  const bool = (k: string, fallback: boolean) => {
-    const v = raw[k];
-    return typeof v === "boolean" ? v : fallback;
-  };
-
-  const primary = str("primaryColor", defs.primaryColor);
-  const rawPreset = typeof raw.colorPreset === "string" && raw.colorPreset ? raw.colorPreset : "";
-  const initialColorPreset = COLOR_PRESETS.some((p) => p.id === rawPreset)
-    ? (rawPreset as ColorPresetId)
-    : inferPresetFromPrimary(primary);
-
-  const rawLayout = str("entryLayout", defs.entryLayout);
-  const initialEntryLayout = ["list", "card_grid", "carousel"].includes(rawLayout) ? rawLayout : defs.entryLayout;
-
-  const initialRequireApproval = bool("requireApproval", defs.requireApproval);
-  const initialAutoApprove = !initialRequireApproval;
-  const initialEnableAttachments = bool("enableAttachments", defs.enableAttachments);
-  const initialAllowAnonymous = bool("allowAnonymous", defs.allowAnonymous);
-
-  const submitStyles = ["filled", "outline", "soft"] as const;
-  const rawSubmit = str("submitButtonStyle", defs.submitButtonStyle);
-  const initialSubmitButtonStyle = submitStyles.includes(rawSubmit as (typeof submitStyles)[number])
-    ? rawSubmit
-    : defs.submitButtonStyle;
-
-  const textScales = ["sm", "md", "lg"] as const;
-  const rawTextScale = str("composerTextScale", defs.composerTextScale);
-  const initialComposerTextScale = textScales.includes(rawTextScale as (typeof textScales)[number])
-    ? rawTextScale
-    : defs.composerTextScale;
-
-  const initialSubmitButtonFgColor = storedHex(raw, "submitButtonFgColor") ?? null;
-  const initialMutedTextColor = storedHex(raw, "mutedTextColor") ?? null;
-
   return (
-    <SettingsAndAppearanceClient
-      projectId={project.id}
-      initialName={project.name}
-      initialWidgetMode={normalizeWidgetMode(project.widgetMode)}
-      initialDomainsText={domainsText}
-      initialAutoApprove={initialAutoApprove}
-      initialEnableAttachments={initialEnableAttachments}
-      initialAllowAnonymous={initialAllowAnonymous}
-      appearance={{
-        theme: str("theme", defs.theme),
-        primary,
-        colorPreset: initialColorPreset,
-        entryLayout: initialEntryLayout,
-        borderRadius: str("borderRadius", defs.borderRadius),
-        fontFamily: str("fontFamily", defs.fontFamily),
-        useHostTypography: bool("useHostTypography", defs.useHostTypography),
-        submitButtonStyle: initialSubmitButtonStyle,
-        composerTextScale: initialComposerTextScale,
-        submitButtonFgColor: initialSubmitButtonFgColor,
-        mutedTextColor: initialMutedTextColor,
-      }}
-    />
+    <div className="dash-panel overflow-hidden">
+      <section className="p-5 sm:p-6 lg:p-7">
+        <div className="mb-6 flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand ring-1 ring-brand/20 dark:bg-brand/20">
+            <SlidersHorizontal className="h-5 w-5" strokeWidth={2} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight text-[var(--foreground)]">Behavior &amp; access</h2>
+            <p className="mt-1 text-sm leading-snug text-[var(--muted)]">
+              Project identity, embedding rules, and who can submit. Use <strong className="font-medium text-[var(--foreground)]">Advanced settings</strong> on this page for spam filters, captcha, and third-party checks.
+            </p>
+          </div>
+        </div>
+        <ProjectSettingsForm
+          projectId={data.projectId}
+          initialName={data.initialName}
+          initialWidgetMode={data.normalizedWidgetMode}
+          initialDomainsText={data.initialDomainsText}
+          initialAutoApprove={data.initialAutoApprove}
+          initialEnableAttachments={data.initialEnableAttachments}
+          initialAllowAnonymous={data.initialAllowAnonymous}
+          initialEnableSpamFilter={data.initialEnableSpamFilter}
+          initialBlockedWordsText={data.initialBlockedWordsText}
+          initialBlockedIPsText={data.initialBlockedIPsText}
+          initialSpamMatchWholeWords={data.initialSpamMatchWholeWords}
+          initialSpamMaxUrlsPerPost={data.initialSpamMaxUrlsPerPost}
+          initialSpamBlockedRegexText={data.initialSpamBlockedRegexText}
+          initialSpamDuplicateWindowSeconds={data.initialSpamDuplicateWindowSeconds}
+          initialSpamPerIdentityCommentLimit={data.initialSpamPerIdentityCommentLimit}
+          initialSpamPerIdentityReviewLimit={data.initialSpamPerIdentityReviewLimit}
+          initialSpamPerIdentityWindowSeconds={data.initialSpamPerIdentityWindowSeconds}
+          initialAkismetEnabled={data.initialAkismetEnabled}
+          initialAkismetHasKey={data.initialAkismetHasKey}
+          initialAkismetBlogUrl={data.initialAkismetBlogUrl}
+          initialAkismetRejectSpam={data.initialAkismetRejectSpam}
+          initialCaptchaProvider={data.initialCaptchaProvider}
+          initialCaptchaSiteKey={data.initialCaptchaSiteKey}
+          initialCaptchaHasSecretKey={data.initialCaptchaHasSecretKey}
+          initialCaptchaMode={data.initialCaptchaMode}
+          initialCaptchaRiskMinLinks={data.initialCaptchaRiskMinLinks}
+          initialCaptchaRiskMinScore={data.initialCaptchaRiskMinScore}
+          initialOpenaiModerationEnabled={data.initialOpenaiModerationEnabled}
+          embedded
+        />
+      </section>
+    </div>
   );
 }
