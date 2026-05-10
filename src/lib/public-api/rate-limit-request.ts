@@ -124,8 +124,3 @@ export async function assertReviewPostRateLimitForIdentity(
     identityWindowSec(settings),
   );
 }
-
-export async function assertAppealRateLimit(request: NextRequest) {
-  const ip = clientIp(request);
-  await assertRateLimit("appeals", ip, rateLimitEnv("RATE_LIMIT_APPEALS", 5), 3600);
-}

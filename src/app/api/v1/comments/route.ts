@@ -27,7 +27,7 @@ import {
   assertNoRecentDuplicateComment,
   duplicateBodyFingerprint,
 } from "@/lib/public-api/content-duplicate";
-import { buildContentAdvisoryPayload } from "@/lib/public-api/content-advisory";
+import { shouldRejectPostForAkismet } from "@/lib/public-api/akismet-post-gate";
 import { assertTurnstileCaptchaIfNeeded } from "@/lib/public-api/captcha-gate";
 import { getSpamBlockReasonForText, isBlockedIp } from "@/lib/public-api/spam";
 import {
@@ -203,10 +203,9 @@ export async function POST(request: NextRequest) {
     });
 
     const firstHost = domainsFromJson(ctx.project.allowedDomains)[0];
-    const { advisory, rejectForAkismet } = await buildContentAdvisoryPayload({
+    const rejectForAkismet = await shouldRejectPostForAkismet({
       request: ctx.request,
       settings,
-      projectId: ctx.project.id,
       firstAllowedDomain: firstHost,
       pageUrl: body.page_url,
       bodyText: `${content}\n${htmlContent ?? ""}`.slice(0, 100_000),
@@ -233,7 +232,6 @@ export async function POST(request: NextRequest) {
         depth,
         submitterIp: submitterIpFromRequest(request),
         duplicateBodyHash: dupHash || undefined,
-        advisorySignals: advisory,
       },
       include: {
         commenter: { select: { name: true, avatar: true } },

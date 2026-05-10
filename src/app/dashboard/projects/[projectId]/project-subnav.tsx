@@ -20,7 +20,7 @@ function navLinkActiveIndex(pathname: string, links: readonly { href: string }[]
 export function ProjectSubnav({
   links,
 }: {
-  links: readonly { href: string; label: string }[];
+  links: readonly { href: string; label: string; badge?: string }[];
 }) {
   const pathname = usePathname();
   const activeIdx = navLinkActiveIndex(pathname, links);
@@ -47,7 +47,21 @@ export function ProjectSubnav({
                   : "text-[var(--muted)] hover:bg-[var(--surface)]/85 hover:text-[var(--foreground)]"
               }`}
             >
-              {t.label}
+              <span className="inline-flex items-center gap-2">
+                <span>{t.label}</span>
+                {t.badge !== undefined && t.badge !== null ? (
+                  <span
+                    className={`min-w-[1.5rem] rounded-md px-1.5 py-0.5 text-center text-[0.7rem] font-bold leading-none tabular-nums ${
+                      active
+                        ? "bg-brand/20 text-brand dark:bg-brand/25"
+                        : "bg-[var(--border)]/80 text-[var(--foreground)]/90 dark:bg-white/10"
+                    }`}
+                    aria-label={`${t.label}: ${t.badge}`}
+                  >
+                    {t.badge}
+                  </span>
+                ) : null}
+              </span>
             </Link>
           );
         })}

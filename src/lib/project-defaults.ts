@@ -65,8 +65,6 @@ export function defaultProjectSettings() {
     captchaMode: "anonymous_only" as string,
     captchaRiskMinLinks: 4,
     captchaRiskMinScore: 0.55,
-    /** Uses `OPENAI_API_KEY` on the server; results are advisory JSON on each post. */
-    openaiModerationEnabled: false,
     locale: "en",
   };
 }

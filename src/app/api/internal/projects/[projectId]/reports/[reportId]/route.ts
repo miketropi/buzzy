@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/project-access";
-import { writeModerationAuditLog } from "@/lib/internal/moderation-audit";
 import { NotFoundError } from "@/lib/utils/errors";
 import { jsonError, jsonSuccess } from "@/lib/utils/response";
 import { patchInternalReportBodySchema } from "@/lib/validators/internal-reports";
@@ -41,15 +40,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     await prisma.report.update({
       where: { id: reportId },
       data: { status: patch.status },
-    });
-
-    await writeModerationAuditLog({
-      projectId,
-      actorUserId: ownerId,
-      action: `report_${patch.status}`,
-      entityType: "report",
-      entityId: reportId,
-      details: { status: patch.status },
     });
 
     return jsonSuccess({ ok: true });

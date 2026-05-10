@@ -4,8 +4,15 @@ export const messageStatusFilterSchema = z.enum(["pending", "approved", "spam", 
 
 export const listInternalMessagesQuerySchema = z.object({
   status: messageStatusFilterSchema,
+  /** Search comment/review body, page URL/title, author name/email (case depends on DB collation). */
+  q: z.string().max(160).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).max(10_000).optional(),
+});
+
+export const bulkMessageStatusBodySchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  status: z.enum(["pending", "approved", "spam", "deleted"]),
 });
 
 export const patchMessageStatusBodySchema = z.object({

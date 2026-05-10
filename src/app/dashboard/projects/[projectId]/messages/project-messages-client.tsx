@@ -63,6 +63,30 @@ function excerpt(text: string | null, max = 140) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+type PageSizeOption = 20 | 50 | 100;
+
+/** 0-based page indices; inserts "gap" for ellipsis between non-adjacent numbers. */
+function getPaginationSlots(currentPage: number, totalPages: number): (number | "gap")[] {
+  if (totalPages <= 1) return [];
+  if (totalPages <= 9) {
+    return Array.from({ length: totalPages }, (_, i) => i);
+  }
+  const show = new Set<number>();
+  show.add(0);
+  show.add(totalPages - 1);
+  for (let d = -2; d <= 2; d++) {
+    const p = currentPage + d;
+    if (p >= 0 && p < totalPages) show.add(p);
+  }
+  const sorted = Array.from(show).sort((a, b) => a - b);
+  const out: (number | "gap")[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push("gap");
+    out.push(sorted[i]);
+  }
+  return out;
+}
+
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[minmax(0,8.5rem)_1fr] gap-x-3 gap-y-1 border-b border-slate-100 py-2.5 text-sm last:border-0 dark:border-slate-800">
@@ -559,7 +583,12 @@ export function ProjectMessagesClient({
   const isCommentMode = widgetMode === "comment";
   const isReviewMode = widgetMode === "review" || widgetMode === "rating";
 
-  const [status, setStatus] = useState<StatusFilter>("pending");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [searchDraft, setSearchDraft] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(20);
+  const [total, setTotal] = useState(0);
   const [comments, setComments] = useState<InboxComment[] | null>(null);
   const [reviews, setReviews] = useState<InboxReview[] | null>(null);
   const [commentsDisabled, setCommentsDisabled] = useState(false);
@@ -580,6 +609,19 @@ export function ProjectMessagesClient({
     | { kind: "review"; item: InboxReview }
     | null
   >(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const headerSelectRef = useRef<HTMLInputElement>(null);
+
+  const listOnPage = isCommentMode ? comments : reviews;
+  const pageRowIds = listOnPage?.map((r) => r.id) ?? [];
+  const allPageSelected = pageRowIds.length > 0 && pageRowIds.every((id) => selected.has(id));
+  const somePageSelected = pageRowIds.some((id) => selected.has(id));
+
+  useEffect(() => {
+    const el = headerSelectRef.current;
+    if (el) el.indeterminate = somePageSelected && !allPageSelected;
+  }, [somePageSelected, allPageSelected]);
 
   const load = useCallback(async () => {
     setErr("");
@@ -588,46 +630,160 @@ export function ProjectMessagesClient({
       if (isCommentMode) {
         const u = new URL(`/api/internal/projects/${projectId}/comments`, window.location.origin);
         u.searchParams.set("status", status);
+        if (searchQ.trim()) u.searchParams.set("q", searchQ.trim());
+        u.searchParams.set("limit", String(pageSize));
+        u.searchParams.set("offset", String(pageIndex * pageSize));
         const res = await fetch(u.toString(), { credentials: "include" });
         const json = (await res.json()) as {
           success?: boolean;
           error?: { message?: string };
-          data?: { comments?: InboxComment[]; commentsDisabled?: boolean };
+          data?: {
+            comments?: InboxComment[];
+            commentsDisabled?: boolean;
+            total?: number;
+          };
         };
         if (!json.success || !json.data) {
           throw new Error(json.error?.message || `Request failed (${res.status})`);
         }
         setCommentsDisabled(!!json.data.commentsDisabled);
         setComments(json.data.commentsDisabled ? [] : json.data.comments ?? []);
+        setTotal(typeof json.data.total === "number" ? json.data.total : 0);
         setReviews(null);
       } else {
         const u = new URL(`/api/internal/projects/${projectId}/reviews`, window.location.origin);
         u.searchParams.set("status", status);
+        if (searchQ.trim()) u.searchParams.set("q", searchQ.trim());
+        u.searchParams.set("limit", String(pageSize));
+        u.searchParams.set("offset", String(pageIndex * pageSize));
         const res = await fetch(u.toString(), { credentials: "include" });
         const json = (await res.json()) as {
           success?: boolean;
           error?: { message?: string };
-          data?: { reviews?: InboxReview[]; reviewsDisabled?: boolean };
+          data?: {
+            reviews?: InboxReview[];
+            reviewsDisabled?: boolean;
+            total?: number;
+          };
         };
         if (!json.success || !json.data) {
           throw new Error(json.error?.message || `Request failed (${res.status})`);
         }
         setReviewsDisabled(!!json.data.reviewsDisabled);
         setReviews(json.data.reviewsDisabled ? [] : json.data.reviews ?? []);
+        setTotal(typeof json.data.total === "number" ? json.data.total : 0);
         setComments(null);
       }
+      setSelected(new Set());
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
       setComments([]);
       setReviews([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [projectId, status, isCommentMode]);
+  }, [projectId, status, isCommentMode, searchQ, pageIndex, pageSize]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [status]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [pageSize]);
+
+  useEffect(() => {
+    const maxIdx = Math.max(0, Math.ceil(total / pageSize) - 1);
+    if (pageIndex > maxIdx) setPageIndex(maxIdx);
+  }, [total, pageSize, pageIndex]);
+
+  function applySearch() {
+    setSearchQ(searchDraft.trim());
+    setPageIndex(0);
+  }
+
+  function clearSearch() {
+    setSearchDraft("");
+    setSearchQ("");
+    setPageIndex(0);
+  }
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function bulkSetStatus(next: Exclude<StatusFilter, "all">) {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setErr("");
+    try {
+      const ids = Array.from(selected);
+      const path = isCommentMode ? "comments" : "reviews";
+      const res = await fetch(`/api/internal/projects/${projectId}/${path}/bulk`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status: next }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        data?: { updated?: number };
+        error?: { message?: string };
+      };
+      if (!json.success) {
+        setErr(json.error?.message || "Bulk update failed");
+        return;
+      }
+      const n = json.data?.updated ?? ids.length;
+      setSelected(new Set());
+      await load();
+      setFeedback({
+        variant: "success",
+        title: "Updated",
+        message:
+          n === ids.length
+            ? `Status set to "${next}" for ${n} message(s).`
+            : `Status set to "${next}" for ${n} of ${ids.length} selected (some IDs may not belong to this project).`,
+      });
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function toggleSelectAllOnPage() {
+    const rows = isCommentMode ? comments : reviews;
+    if (!rows?.length) return;
+    const ids = rows.map((r) => r.id);
+    const all = ids.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (all) {
+        for (const id of ids) next.delete(id);
+      } else {
+        for (const id of ids) next.add(id);
+      }
+      return next;
+    });
+  }
+
+  const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize));
+  const pageStart = total === 0 ? 0 : pageIndex * pageSize + 1;
+  const pageEnd = Math.min(total, (pageIndex + 1) * pageSize);
+  const paginationSlots = getPaginationSlots(pageIndex, totalPages);
 
   async function patchComment(id: string, next: Exclude<StatusFilter, "all">) {
     setErr("");
@@ -789,22 +945,60 @@ export function ProjectMessagesClient({
             (official response shown on the widget).
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400" htmlFor="bz-status">
-            Status
-          </label>
-          <select
-            id="bz-status"
-            className="rounded-lg border border-slate-200/90 bg-white px-2 py-1.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as StatusFilter)}
-          >
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="spam">Spam</option>
-            <option value="deleted">Deleted / hidden</option>
-            <option value="all">All</option>
-          </select>
+        <div className="flex w-full max-w-2xl flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400" htmlFor="bz-status">
+              Status
+            </label>
+            <select
+              id="bz-status"
+              className="rounded-lg border border-slate-200/90 bg-white px-2 py-1.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as StatusFilter)}
+            >
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="spam">Spam</option>
+              <option value="deleted">Deleted / hidden</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:min-w-[16rem]">
+            <label className="sr-only" htmlFor="bz-inbox-search">
+              Search
+            </label>
+            <input
+              id="bz-inbox-search"
+              type="search"
+              enterKeyHint="search"
+              placeholder="Search text, author, page…"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applySearch();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-lg border border-slate-200/90 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800/60"
+              onClick={() => applySearch()}
+            >
+              Search
+            </button>
+            {searchQ ? (
+              <button
+                type="button"
+                className="text-sm font-medium text-brand hover:underline dark:text-brand"
+                onClick={() => clearSearch()}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
           <button
             type="button"
             className="rounded-lg border border-slate-200/90 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800/60"
@@ -821,7 +1015,139 @@ export function ProjectMessagesClient({
         </p>
       ) : null}
 
+      {selected.size > 0 && !loading ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand/25 bg-brand/5 px-3 py-2.5 dark:bg-brand/10">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{selected.size} selected</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={bulkBusy}
+              className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              onClick={() => void bulkSetStatus("approved")}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              className="rounded-md bg-amber-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+              onClick={() => void bulkSetStatus("spam")}
+            >
+              Spam
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:text-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+              onClick={() => void bulkSetStatus("deleted")}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-950 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/50 disabled:opacity-50"
+              onClick={() => void bulkSetStatus("pending")}
+            >
+              Pending
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              className="rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 hover:underline dark:text-slate-300"
+              onClick={() => clearSelection()}
+            >
+              Clear selection
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {loading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+
+      {!loading && ((isCommentMode && !commentsDisabled) || (isReviewMode && !reviewsDisabled)) ? (
+        <div className="flex flex-col gap-3 text-sm text-slate-600 dark:text-slate-400 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+          <p className="min-w-0">
+            {total === 0 ? (
+              <span>No messages match.</span>
+            ) : (
+              <>
+                Showing <span className="font-medium text-slate-800 dark:text-slate-200">{pageStart}</span>–
+                <span className="font-medium text-slate-800 dark:text-slate-200">{pageEnd}</span> of{" "}
+                <span className="font-medium text-slate-800 dark:text-slate-200">{total}</span>
+                {searchQ ? (
+                  <>
+                    {" "}
+                    <span className="text-slate-500">·</span> filtered by search
+                  </>
+                ) : null}
+              </>
+            )}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
+            <label className="flex items-center gap-2 text-xs">
+              <span className="whitespace-nowrap font-medium text-slate-600 dark:text-slate-400">Per page</span>
+              <select
+                id="bz-inbox-page-size"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value) as PageSizeOption)}
+                className="rounded-lg border border-slate-200/90 bg-white px-2 py-1.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            {total > 0 && totalPages > 1 ? (
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Previous page"
+                  className="rounded-lg border border-slate-200/90 px-2.5 py-1 text-xs font-medium text-slate-700 enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:enabled:hover:bg-slate-800/60"
+                  disabled={pageIndex <= 0}
+                  onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                >
+                  Prev
+                </button>
+                {paginationSlots.map((slot, si) =>
+                  slot === "gap" ? (
+                    <span key={`gap-${si}`} className="select-none px-0.5 text-slate-400" aria-hidden>
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={slot}
+                      type="button"
+                      aria-label={`Page ${slot + 1}`}
+                      aria-current={slot === pageIndex ? "page" : undefined}
+                      className={
+                        slot === pageIndex
+                          ? "min-w-[2rem] rounded-lg bg-brand px-2 py-1 text-center text-xs font-semibold text-white ring-1 ring-brand/30"
+                          : "min-w-[2rem] rounded-lg border border-slate-200/90 px-2 py-1 text-center text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800/60"
+                      }
+                      onClick={() => setPageIndex(slot)}
+                    >
+                      {slot + 1}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  aria-label="Next page"
+                  className="rounded-lg border border-slate-200/90 px-2.5 py-1 text-xs font-medium text-slate-700 enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:enabled:hover:bg-slate-800/60"
+                  disabled={pageIndex >= totalPages - 1}
+                  onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+            {total > 0 && totalPages === 1 ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">Page 1 of 1</span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {!loading && isCommentMode && commentsDisabled ? (
         <p className="text-sm text-slate-500">Comments inbox is available when the project widget mode is set to comment.</p>
@@ -836,6 +1162,18 @@ export function ProjectMessagesClient({
           <table className="min-w-[640px] w-full border-collapse text-left text-sm">
             <thead className="border-b border-slate-200/90 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
               <tr>
+                <th className="w-10 px-2 py-2">
+                  <span className="sr-only">Select</span>
+                  <input
+                    ref={headerSelectRef}
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={allPageSelected}
+                    onChange={() => toggleSelectAllOnPage()}
+                    disabled={!comments?.length}
+                    title="Select all on this page"
+                  />
+                </th>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2">Page</th>
                 <th className="px-3 py-2">Author</th>
@@ -848,13 +1186,22 @@ export function ProjectMessagesClient({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {comments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                     No comments for this filter.
                   </td>
                 </tr>
               ) : (
                 comments.map((c) => (
                   <tr key={c.id} className="bg-white/80 dark:bg-slate-900/30">
+                    <td className="px-2 py-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={selected.has(c.id)}
+                        onChange={() => toggleRow(c.id)}
+                        aria-label={`Select comment ${c.id.slice(0, 8)}…`}
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">
                       {new Date(c.createdAt).toLocaleString()}
                     </td>
@@ -946,6 +1293,18 @@ export function ProjectMessagesClient({
           <table className="min-w-[640px] w-full border-collapse text-left text-sm">
             <thead className="border-b border-slate-200/90 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
               <tr>
+                <th className="w-10 px-2 py-2">
+                  <span className="sr-only">Select</span>
+                  <input
+                    ref={headerSelectRef}
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={allPageSelected}
+                    onChange={() => toggleSelectAllOnPage()}
+                    disabled={!reviews?.length}
+                    title="Select all on this page"
+                  />
+                </th>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2">Page</th>
                 <th className="px-3 py-2">Rating</th>
@@ -959,13 +1318,22 @@ export function ProjectMessagesClient({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {reviews.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
                     No reviews for this filter.
                   </td>
                 </tr>
               ) : (
                 reviews.map((r) => (
                   <tr key={r.id} className="bg-white/80 dark:bg-slate-900/30">
+                    <td className="px-2 py-2 align-top">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={selected.has(r.id)}
+                        onChange={() => toggleRow(r.id)}
+                        aria-label={`Select review ${r.id.slice(0, 8)}…`}
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">
                       {new Date(r.createdAt).toLocaleString()}
                     </td>

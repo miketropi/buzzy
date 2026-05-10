@@ -37,7 +37,6 @@ export function ProjectSettingsForm({
   initialCaptchaMode,
   initialCaptchaRiskMinLinks,
   initialCaptchaRiskMinScore,
-  initialOpenaiModerationEnabled,
   widgetMode: widgetModeControlled,
   onWidgetModeChange,
   embedded = false,
@@ -70,7 +69,6 @@ export function ProjectSettingsForm({
   initialCaptchaMode: string;
   initialCaptchaRiskMinLinks: number;
   initialCaptchaRiskMinScore: number;
-  initialOpenaiModerationEnabled: boolean;
   /** When set with `onWidgetModeChange`, widget mode is controlled (e.g. live preview). */
   widgetMode?: string;
   onWidgetModeChange?: (mode: string) => void;
@@ -127,7 +125,6 @@ export function ProjectSettingsForm({
   );
   const [captchaRiskMinLinks, setCaptchaRiskMinLinks] = useState(initialCaptchaRiskMinLinks);
   const [captchaRiskMinScore, setCaptchaRiskMinScore] = useState(initialCaptchaRiskMinScore);
-  const [openaiModerationEnabled, setOpenaiModerationEnabled] = useState(initialOpenaiModerationEnabled);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -243,7 +240,6 @@ export function ProjectSettingsForm({
           akismetEnabled,
           akismetBlogUrl: akismetBlogUrl.trim() || null,
           akismetRejectSpam,
-          openaiModerationEnabled,
           ...(clearAkismetApiKey ? { akismetApiKey: null as null } : {}),
           ...(!clearAkismetApiKey && akismetApiKeyDraft.trim()
             ? { akismetApiKey: akismetApiKeyDraft.trim() }
@@ -387,8 +383,8 @@ export function ProjectSettingsForm({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">Advanced settings</p>
               <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-zinc-500">
-                Spam filtering, IP blocks, Akismet, Cloudflare Turnstile, and optional OpenAI moderation signals. Open
-                when you need tighter abuse controls.
+                Spam filtering, IP blocks, Akismet, and Cloudflare Turnstile. Open when you need tighter abuse
+                controls.
               </p>
             </div>
             <ChevronDown
@@ -576,7 +572,7 @@ export function ProjectSettingsForm({
 
       <div className="space-y-3 rounded-lg border border-slate-200/90 bg-slate-50/60 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900/40">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-zinc-400">
-          Akismet, captcha &amp; advisory moderation
+          Akismet &amp; captcha
         </p>
         <label className="flex cursor-pointer items-start gap-3">
           <input
@@ -656,7 +652,7 @@ export function ProjectSettingsForm({
               Reject when Akismet marks spam
             </span>
             <span className="block text-xs text-slate-500 dark:text-zinc-500">
-              When off, Akismet only adds advisory signals; moderators can still review.
+              When off, posts Akismet marks as spam are still accepted.
             </span>
           </span>
         </label>
@@ -784,25 +780,6 @@ export function ProjectSettingsForm({
             </div>
           ) : null}
         </div>
-
-        <label className="flex cursor-pointer items-start gap-3 border-t border-slate-200/80 pt-3 dark:border-zinc-700">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={openaiModerationEnabled}
-            onChange={(e) => setOpenaiModerationEnabled(e.target.checked)}
-          />
-          <span>
-            <span className="block text-sm font-medium text-slate-800 dark:text-zinc-100">
-              OpenAI moderation (advisory signals)
-            </span>
-            <span className="block text-xs text-slate-500 dark:text-zinc-500">
-              Uses the server{" "}
-              <code className="rounded bg-slate-200/80 px-1 dark:bg-zinc-800">OPENAI_API_KEY</code> when set. Never
-              blocks on its own.
-            </span>
-          </span>
-        </label>
       </div>
         </div>
       </details>

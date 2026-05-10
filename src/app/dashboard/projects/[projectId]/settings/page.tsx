@@ -65,7 +65,6 @@ export default async function ProjectSettingsGeneralPage({
           initialCaptchaMode={data.initialCaptchaMode}
           initialCaptchaRiskMinLinks={data.initialCaptchaRiskMinLinks}
           initialCaptchaRiskMinScore={data.initialCaptchaRiskMinScore}
-          initialOpenaiModerationEnabled={data.initialOpenaiModerationEnabled}
           embedded
         />
       </section>

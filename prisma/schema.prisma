@@ -71,8 +71,6 @@ model Project {
   reviews            Review[]
   commenters         Commenter[]
   pages              Page[]
-  moderationAuditLogs ModerationAuditLog[]
-  appeals           Appeal[]
 
   @@index([ownerId])
   @@map("projects")
@@ -157,7 +155,6 @@ model Comment {
   downvotes     Int       @default(0)
   isPinned      Boolean   @default(false)
   editedAt      DateTime?
-  advisorySignals Json?   @map("advisory_signals")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -203,7 +200,6 @@ model Review {
   staffReplyContent String? @db.Text
   staffReplyHtml    String? @db.Text
   staffRepliedAt    DateTime?
-  advisorySignals   Json? @map("advisory_signals")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -256,39 +252,4 @@ model Report {
   @@index([reviewId])
   @@index([status])
   @@map("reports")
-}
-
-model ModerationAuditLog {
-  id           String    @id @default(uuid())
-  projectId    String
-  actorUserId  String? /// Dashboard user performing the action, null when system-only.
-  action       String    @db.VarChar(96)
-  entityType   String    @db.VarChar(32)
-  entityId     String    @db.VarChar(48)
-  details      Json?
-  createdAt    DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, createdAt])
-  @@map("moderation_audit_logs")
-}
-
-model Appeal {
-  id         String @id @default(uuid())
-  projectId  String
-  commentId  String?
-  reviewId   String?
-  email      String?  @db.VarChar(320)
-  message    String   @db.Text
-  status     String   @default("open")
-  reviewedAt DateTime?
-  createdAt  DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, status])
-  @@index([commentId])
-  @@index([reviewId])
-  @@map("appeals")
 }

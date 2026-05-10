@@ -77,20 +77,31 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const raw = Object.fromEntries(request.nextUrl.searchParams);
     const q = listInternalReportsQuerySchema.parse(raw);
     const limit = q.limit ?? 50;
-    const statusClause =
-      q.status === "all" ? {} : { status: (q.status ?? "pending") as "pending" | "dismissed" | "actioned" };
+    const offset = q.offset ?? 0;
+
+    const whereReport: Prisma.ReportWhereInput = {
+      OR: [{ comment: { projectId } }, { review: { projectId } }],
+    };
+    if (q.status && q.status !== "all") {
+      whereReport.status = q.status;
+    }
+
+    const total = await prisma.report.count({ where: whereReport });
 
     const rows = await prisma.report.findMany({
-      where: {
-        ...statusClause,
-        OR: [{ comment: { projectId } }, { review: { projectId } }],
-      },
+      where: whereReport,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
+      skip: offset,
       include: reportInclude,
     });
 
-    return jsonSuccess({ reports: rows.map(serializeReport) });
+    return jsonSuccess({
+      reports: rows.map(serializeReport),
+      total,
+      limit,
+      offset,
+    });
   } catch (e) {
     return jsonError(e);
   }

@@ -28,7 +28,7 @@ import {
 } from "@/lib/public-api/attachments";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
 import { domainsFromJson } from "@/lib/json-domains";
-import { buildContentAdvisoryPayload } from "@/lib/public-api/content-advisory";
+import { shouldRejectPostForAkismet } from "@/lib/public-api/akismet-post-gate";
 import { assertTurnstileCaptchaIfNeeded } from "@/lib/public-api/captcha-gate";
 import { getSpamBlockReasonForText, isBlockedIp } from "@/lib/public-api/spam";
 import { singlePublicReview } from "@/lib/public-api/serialize-review";
@@ -180,14 +180,13 @@ export async function POST(request: NextRequest) {
     }
 
     const firstHost = domainsFromJson(ctx.project.allowedDomains)[0];
-    const advisoryProbe = [title ?? "", content ?? "", htmlContent ?? ""].join("\n").slice(0, 100_000);
-    const { advisory, rejectForAkismet } = await buildContentAdvisoryPayload({
+    const akismetProbe = [title ?? "", content ?? "", htmlContent ?? ""].join("\n").slice(0, 100_000);
+    const rejectForAkismet = await shouldRejectPostForAkismet({
       request: ctx.request,
       settings,
-      projectId: ctx.project.id,
       firstAllowedDomain: firstHost,
       pageUrl: body.page_url,
-      bodyText: advisoryProbe.trim().length ? advisoryProbe : "(rating only)",
+      bodyText: akismetProbe.trim().length ? akismetProbe : "(rating only)",
       authorName: body.commenter.name,
       authorEmail: body.commenter.email?.trim() || null,
       kind: "review",
@@ -212,7 +211,6 @@ export async function POST(request: NextRequest) {
         status,
         submitterIp: submitterIpFromRequest(request),
         duplicateBodyHash: dupHash || null,
-        advisorySignals: advisory,
       },
       settings.allowMultipleReviews,
     );

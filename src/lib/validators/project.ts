@@ -77,7 +77,6 @@ export const projectSettingsPatchSchema = z
     spamPerIdentityCommentLimit: z.number().int().min(0).max(500).optional(),
     spamPerIdentityReviewLimit: z.number().int().min(0).max(500).optional(),
     spamPerIdentityWindowSeconds: z.number().int().min(60).max(604800).optional(),
-    openaiModerationEnabled: z.boolean().optional(),
     akismetEnabled: z.boolean().optional(),
     akismetApiKey: z.string().max(200).optional().nullable(),
     akismetBlogUrl: z.string().max(500).optional().nullable(),

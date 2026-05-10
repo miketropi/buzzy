@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 
 import { isUuid, requireOwnerId, requireProjectOwned } from "@/lib/internal/project-access";
 import { prisma } from "@/lib/prisma";
-import { writeModerationAuditLog } from "@/lib/internal/moderation-audit";
 import { recalculatePageRatingSummary } from "@/lib/public-api/rating-summary";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { getSpamBlockReasonForText } from "@/lib/public-api/spam";
@@ -143,14 +142,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     if (patch.status !== undefined) {
       await recalculatePageRatingSummary(updated.pageId, settings.ratingScale);
-      await writeModerationAuditLog({
-        projectId,
-        actorUserId: ownerId,
-        action: `review_${patch.status}`,
-        entityType: "review",
-        entityId: reviewId,
-        details: { from: existing.status, to: patch.status },
-      });
     }
 
     return jsonSuccess({ review: serializeReview(updated) });

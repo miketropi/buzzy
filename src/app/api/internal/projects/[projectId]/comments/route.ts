@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { commentInboxWhere, inboxSearchTrimmed } from "@/lib/internal/messages-inbox-query";
 import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/project-access";
 import { getOrCreateStaffCommenter } from "@/lib/internal/staff-commenter";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
@@ -83,18 +84,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { projectId } = await getParams(context);
     const project = await requireProjectOwned(projectId, ownerId);
     if (normalizeWidgetMode(project.widgetMode) === "review") {
-      return jsonSuccess({ comments: [], commentsDisabled: true as const });
+      return jsonSuccess({
+        comments: [],
+        commentsDisabled: true as const,
+        total: 0,
+        limit: 50,
+        offset: 0,
+      });
     }
 
     const raw = Object.fromEntries(request.nextUrl.searchParams);
     const q = listInternalMessagesQuerySchema.parse(raw);
     const limit = q.limit ?? 50;
     const offset = q.offset ?? 0;
+    const search = inboxSearchTrimmed(q.q);
+    const where = commentInboxWhere(projectId, q.status, search);
 
-    const where: Prisma.CommentWhereInput = { projectId };
-    if (q.status && q.status !== "all") {
-      where.status = q.status;
-    }
+    const total = await prisma.comment.count({ where });
 
     const rows = await prisma.comment.findMany({
       where,
@@ -112,6 +118,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return jsonSuccess({
       comments: rows.map(serializeComment),
       commentsDisabled: false as const,
+      total,
+      limit,
+      offset,
     });
   } catch (e) {
     return jsonError(e);

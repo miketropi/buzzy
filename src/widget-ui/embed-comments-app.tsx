@@ -44,6 +44,8 @@ export function EmbedCommentsApp({
   const enableVoting = features.enable_voting !== false;
   const enableRich = features.enable_rich_editor !== false;
   const uploadsOk = cfg.uploads_configured === true && features.allow_attachments !== false;
+  /** When uploads are off, attachment step is omitted — compose and submit in one step. */
+  const attachmentStepEnabled = uploadsOk;
 
   const captchaSiteKey = typeof cfg.captcha_site_key === "string" ? cfg.captcha_site_key.trim() : "";
   const captchaMode = String(cfg.captcha_mode ?? "anonymous_only");
@@ -255,7 +257,7 @@ export function EmbedCommentsApp({
 
   const goCommentStep2 = useCallback(() => {
     setErr("");
-    if (editingId) return;
+    if (editingId || !attachmentStepEnabled) return;
     if (!hostSsoProvisioned && !name.trim()) {
       setErr("Please enter your name.");
       return;
@@ -267,7 +269,7 @@ export function EmbedCommentsApp({
     setCaptchaToken(null);
     setCaptchaNonce((n) => n + 1);
     setComposerStep(1);
-  }, [name, enableRich, editingId, hostSsoProvisioned]);
+  }, [name, enableRich, editingId, hostSsoProvisioned, attachmentStepEnabled]);
 
   function buildCommentSpamProbeForCaptcha(): string {
     let plainFromText = "";
@@ -464,14 +466,18 @@ export function EmbedCommentsApp({
       });
   }
 
-  const commentStepLabels = ["Profile", "Files"];
+  const commentStepLabels = attachmentStepEnabled ? ["Profile", "Files"] : ["Comment"];
   const isEditing = editingId !== null;
+  const composeModalSteps = isEditing ? 1 : attachmentStepEnabled ? 2 : 1;
   const captchaProbeForUi =
-    composerOpen && editingId === null && composerStep === 1 ? buildCommentSpamProbeForCaptcha() : "";
+    composerOpen && editingId === null
+      ? buildCommentSpamProbeForCaptcha()
+      : "";
+  const captchaOnAttachmentsStepOnly = attachmentStepEnabled && !isEditing;
   const showTurnstile =
     composerOpen &&
     editingId === null &&
-    composerStep === 1 &&
+    (captchaOnAttachmentsStepOnly ? composerStep === 1 : composerStep === 0) &&
     widgetShouldShowTurnstileUi({
       hasSiteKey: Boolean(captchaSiteKey),
       mode: captchaMode,
@@ -539,7 +545,7 @@ export function EmbedCommentsApp({
           onClose={closeComposer}
           title={isEditing ? "Edit comment" : parentId ? "Reply" : "Post a comment"}
           stepIndex={isEditing ? 0 : composerStep}
-          totalSteps={isEditing ? 1 : 2}
+          totalSteps={composeModalSteps}
           stepLabels={isEditing ? ["Edit comment"] : commentStepLabels}
           footer={
             <div className="bz-modal-footer-inner">
@@ -555,6 +561,20 @@ export function EmbedCommentsApp({
                     onClick={() => submitComment()}
                   >
                     {submitting ? "Saving…" : "Save changes"}
+                  </button>
+                </>
+              ) : !attachmentStepEnabled ? (
+                <>
+                  <button type="button" className="bz-btn--secondary bz-btn--modal" onClick={closeComposer}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="bz-btn bz-btn--modal bz-btn--modal-primary"
+                    disabled={submitting}
+                    onClick={() => submitComment()}
+                  >
+                    {submitting ? "Posting…" : "Post comment"}
                   </button>
                 </>
               ) : composerStep === 0 ? (
@@ -635,30 +655,46 @@ export function EmbedCommentsApp({
                 )}
               </div>
             </>
-          ) : composerStep === 0 ? (
+          ) : !attachmentStepEnabled || composerStep === 0 ? (
             <>
-              {hostSsoProvisioned ? (
-                parentId ? (
+              {attachmentStepEnabled ? (
+                hostSsoProvisioned ? (
+                  parentId ? (
+                    <BzModalIntro>
+                      You&apos;re replying in a thread — your note nests under the original comment. Add images or
+                      documents in step 2, or skip straight to post if it&apos;s text only.
+                    </BzModalIntro>
+                  ) : (
+                    <BzModalIntro>
+                      You&apos;re signed in with your host account below. Step 2 is optional uploads — add files there or
+                      skip straight to post.
+                    </BzModalIntro>
+                  )
+                ) : parentId ? (
                   <BzModalIntro>
                     You&apos;re replying in a thread — your note nests under the original comment. Add images or documents
                     in step 2, or skip straight to post if it&apos;s text only.
                   </BzModalIntro>
                 ) : (
                   <BzModalIntro>
-                    You&apos;re signed in with your host account below. Step 2 is optional uploads — add files there or skip
-                    straight to post.
+                    Step 1 is your name, optional email, and what you want to say. Step 2 is optional uploads — keep this
+                    screen clean until you need files.
                   </BzModalIntro>
+                )
+              ) : hostSsoProvisioned ? (
+                parentId ? (
+                  <BzModalIntro>
+                    You&apos;re replying in a thread — your note nests under the original comment.
+                  </BzModalIntro>
+                ) : (
+                  <BzModalIntro>You&apos;re signed in with your host account below.</BzModalIntro>
                 )
               ) : parentId ? (
                 <BzModalIntro>
-                  You&apos;re replying in a thread — your note nests under the original comment. Add images or documents
-                  in step 2, or skip straight to post if it&apos;s text only.
+                  You&apos;re replying in a thread — your note nests under the original comment.
                 </BzModalIntro>
               ) : (
-                <BzModalIntro>
-                  Step 1 is your name, optional email, and what you want to say. Step 2 is optional uploads — keep this
-                  screen clean until you need files.
-                </BzModalIntro>
+                <BzModalIntro>Add your name, optional email, and your comment — then post.</BzModalIntro>
               )}
               {hostSsoProvisioned ? (
                 <BzComposerSsoSummary name={name.trim()} email={email.trim()} avatarUrl={avatarUrl.trim() || undefined} />
@@ -703,7 +739,11 @@ export function EmbedCommentsApp({
                       ref={editorRef}
                       disabled={submitting}
                       initialHtml={richDraftHtml}
-                      placeholder="Write your comment… Formatting tools below — uploads are in the next step."
+                      placeholder={
+                        attachmentStepEnabled
+                          ? "Write your comment… Formatting tools below — uploads are in the next step."
+                          : "Write your comment…"
+                      }
                     />
                   </div>
                 ) : (
@@ -718,6 +758,12 @@ export function EmbedCommentsApp({
                   />
                 )}
               </div>
+              {showTurnstile && !attachmentStepEnabled ? (
+                <div className="bz-form-field">
+                  <span className="bz-l">Verification</span>
+                  <BzTurnstile siteKey={captchaSiteKey} onToken={onCaptchaToken} resetKey={captchaNonce} />
+                </div>
+              ) : null}
             </>
           ) : (
             <>

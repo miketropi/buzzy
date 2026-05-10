@@ -1,26 +1,10 @@
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { ProjectAppealsClient } from "./project-appeals-client";
+import { redirect } from "next/navigation";
 
-export default async function ProjectAppealsPage({
+/** Appeals were removed; old links land on Messages. */
+export default function ProjectAppealsRedirectPage({
   params,
 }: {
   params: { projectId: string };
 }) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
-
-  const project = await prisma.project.findFirst({
-    where: { id: params.projectId, ownerId: session.user.id },
-    select: { id: true },
-  });
-
-  if (!project) {
-    notFound();
-  }
-
-  return <ProjectAppealsClient projectId={project.id} />;
+  redirect(`/dashboard/projects/${params.projectId}/messages`);
 }

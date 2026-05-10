@@ -70,7 +70,6 @@ export type ProjectSettingsPageData = {
   initialCaptchaMode: string;
   initialCaptchaRiskMinLinks: number;
   initialCaptchaRiskMinScore: number;
-  initialOpenaiModerationEnabled: boolean;
   appearance: ProjectSettingsAppearanceProps;
 };
 
@@ -183,7 +182,6 @@ export async function loadProjectSettingsPageDataForOwner(args: {
     1,
     Math.max(0.01, num("captchaRiskMinScore", defs.captchaRiskMinScore)),
   );
-  const initialOpenaiModerationEnabled = bool("openaiModerationEnabled", defs.openaiModerationEnabled);
 
   return {
     projectId: project.id,
@@ -213,7 +211,6 @@ export async function loadProjectSettingsPageDataForOwner(args: {
     initialCaptchaMode,
     initialCaptchaRiskMinLinks,
     initialCaptchaRiskMinScore,
-    initialOpenaiModerationEnabled,
     appearance: {
       theme: str("theme", defs.theme),
       primary,

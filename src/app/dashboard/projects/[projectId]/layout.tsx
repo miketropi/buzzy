@@ -2,15 +2,22 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { ProjectSubnav } from "./project-subnav";
 
-function tabLinks(projectId: string) {
+function formatNavCount(n: number): string {
+  return n > 99 ? "99+" : String(n);
+}
+
+function tabLinks(
+  projectId: string,
+  counts: { messages: number; reports: number },
+) {
   const base = `/dashboard/projects/${projectId}`;
   return [
     { href: base, label: "Overview" },
-    { href: `${base}/messages`, label: "Messages" },
-    { href: `${base}/reports`, label: "Reports" },
-    { href: `${base}/appeals`, label: "Appeals" },
+    { href: `${base}/messages`, label: "Messages", badge: formatNavCount(counts.messages) },
+    { href: `${base}/reports`, label: "Reports", badge: formatNavCount(counts.reports) },
     { href: `${base}/settings`, label: "Settings" },
     { href: `${base}/api-keys`, label: "API keys" },
     { href: `${base}/how-to-use`, label: "How to use" },
@@ -31,14 +38,30 @@ export default async function ProjectSectionLayout({
 
   const project = await prisma.project.findFirst({
     where: { id: params.projectId, ownerId: session.user.id },
-    select: { id: true, name: true, slug: true },
+    select: { id: true, name: true, slug: true, widgetMode: true },
   });
 
   if (!project) {
     notFound();
   }
 
-  const links = tabLinks(project.id);
+  const mode = normalizeWidgetMode(project.widgetMode);
+  const [messageTotal, pendingReportsCount] = await Promise.all([
+    mode === "comment"
+      ? prisma.comment.count({ where: { projectId: project.id } })
+      : prisma.review.count({ where: { projectId: project.id } }),
+    prisma.report.count({
+      where: {
+        status: "pending",
+        OR: [
+          { comment: { projectId: project.id } },
+          { review: { projectId: project.id } },
+        ],
+      },
+    }),
+  ]);
+
+  const links = tabLinks(project.id, { messages: messageTotal, reports: pendingReportsCount });
 
   return (
     <div className="space-y-8">

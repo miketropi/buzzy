@@ -1,4 +1,4 @@
-import { computeLocalHeuristicSignals } from "@/lib/public-api/advisory-moderation";
+import { computeLocalHeuristicSignals } from "@/lib/public-api/spam-probe-heuristics";
 import { countProbableUrls } from "@/lib/public-api/spam";
 
 /**

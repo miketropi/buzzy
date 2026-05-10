@@ -156,14 +156,12 @@ These are **prioritized** combinations of work that fit a product like Buzzy (em
 
 ### Phase C — Optional third-party — **implemented**
 
-1. **Akismet**: Project settings (`akismetEnabled`, `akismetApiKey`, `akismetBlogUrl`, `akismetRejectSpam`). Server helper `src/lib/public-api/akismet-check.ts`; advisory merge in `content-advisory.ts`. Global kill-switch **`BUZZY_AKISMET_DISABLED=1`** skips outbound checks.
-2. **CAPTCHA**: **Cloudflare Turnstile** when **`captchaProvider`** is `turnstile`. Keys + **`captchaMode`** (`off` | `anonymous_only` | `risk` | `always`) and optional **`captchaRiskMinLinks`** / **`captchaRiskMinScore`**. Widget reads **`captcha_site_key`**, **`captcha_mode`**, and risk knobs from public config; sends **`captcha_token`** on comment/review POSTs. **`captcha-ui.ts`** matches **`captcha-gate.ts`** so the widget only renders Turnstile when verification may be required.
+1. **Akismet**: Project settings (`akismetEnabled`, `akismetApiKey`, `akismetBlogUrl`, `akismetRejectSpam`). Helpers `src/lib/public-api/akismet-check.ts` (API call) and `akismet-post-gate.ts` (public comment/review POST). Global kill-switch **`BUZZY_AKISMET_DISABLED=1`** skips outbound checks.
+2. **CAPTCHA**: **Cloudflare Turnstile** when **`captchaProvider`** is `turnstile`. Keys + **`captchaMode`** (`off` | `anonymous_only` | `risk` | `always`) and optional **`captchaRiskMinLinks`** / **`captchaRiskMinScore`**. Risk mode uses local text heuristics in **`spam-probe-heuristics.ts`** (aligned with **`captcha-ui.ts`** / **`captcha-gate.ts`**). Widget reads **`captcha_site_key`**, **`captcha_mode`**, and risk knobs from public config; sends **`captcha_token`** on comment/review POSTs. **`captcha-ui.ts`** matches **`captcha-gate.ts`** so the widget only renders Turnstile when verification may be required.
 
-### Phase D — Trust and safety program — **implemented**
+### Phase D — Trust and safety program — **not in product**
 
-1. **Advisory signals**: Local heuristics + optional OpenAI moderation (`OPENAI_API_KEY`); merged with Akismet; persisted on **`Comment`** / **`Review`** (`advisory_signals` JSON).
-2. **Moderation audit log**: **`ModerationAuditLog`** + **`writeModerationAuditLog`** on triage / appeal / status updates as wired in internal routes.
-3. **Appeals**: **`Appeal`** model; **`POST /api/v1/appeals`**; dashboard **Appeals** tab; rate limit **`RATE_LIMIT_APPEALS`** (default 5 / hour per IP).
+An earlier revision described stored advisory JSON, OpenAI moderation, a moderation audit table, and a public appeals API. Those pieces are **not** shipped in the current codebase; Akismet, Turnstile, and dashboard triage (Messages, Reports) remain.
 
 ---
 
@@ -182,9 +180,9 @@ These are **prioritized** combinations of work that fit a product like Buzzy (em
 | Rate limits | Yes (per-IP env + optional per-identity Redis per project) | Vendor WAF, exponential backoff |
 | Word / rule blocks | Words, IPs, optional whole-word + regex lists, URL cap, duplicate-window hash | Vendor APIs, smarter dedup |
 | Reports DB + API | Yes (+ dashboard queue + embed report UI) | Webhooks / notifications |
-| External spam API | Optional Akismet per project (advisory + optional reject) | Spam/ham feedback loops |
+| External spam API | Optional Akismet per project (optional auto-reject) | Spam/ham feedback loops |
 | CAPTCHA | Turnstile (off / guests-only / risk / always) | Other providers |
-| ML / LLM moderation | Optional OpenAI moderation → advisory JSON | Self-hosted classifiers |
+| ML / LLM moderation | Not integrated | Self-hosted or vendor APIs |
 
 This roadmap keeps **incremental value**: Phase A unlocks the reporting system you already modeled; later phases add depth without committing to a single vendor.
 
@@ -210,5 +208,5 @@ This roadmap keeps **incremental value**: Phase A unlocks the reporting system y
 | Report schema | `prisma/schema.prisma` → `Report` |
 | Validators | `src/lib/validators/comment.ts`, `src/lib/validators/review.ts` |
 | Project settings keys | `src/lib/project-defaults.ts`, `src/lib/validators/project.ts` |
-| Phase C/D (Akismet, Turnstile, advisory, appeals) | `akismet-check.ts`, `turnstile-verify.ts`, `captcha-gate.ts`, `captcha-ui.ts`, `content-advisory.ts`, `moderation-audit.ts`, `appeals` routes under `api/v1` and `api/internal` |
-| Prisma models | `ModerationAuditLog`, `Appeal`; `advisory_signals` on Comment/Review |
+| Akismet + captcha gate | `akismet-check.ts`, `akismet-post-gate.ts`, `turnstile-verify.ts`, `captcha-gate.ts`, `captcha-ui.ts`, `spam-probe-heuristics.ts` |
+| Prisma (comments / reviews) | No stored advisory JSON; spam fields use `duplicate_body_hash`, status, etc. |
