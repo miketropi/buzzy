@@ -1,0 +1,75 @@
+# Production-style backing services for Buzzy (MySQL + Redis).
+# Similar to docker-compose.yml, but tuned for longevity and safer defaults when
+# deploying on a host that also runs the Next.js app (or another Compose project).
+#
+# Usage:
+#   docker compose --env-file .env.docker-prod -f docker-compose-product.yml up -d
+#   docker compose -f docker-compose-product.yml logs -f
+#
+# Override variables in .env.docker-prod or your shell. Example DATABASE_URL /
+# REDIS_URL for the app when both bind to localhost:
+#   DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@127.0.0.1:3306/${MYSQL_DATABASE}"
+#   REDIS_URL="redis://127.0.0.1:6379"
+#   # or with password:
+#   REDIS_URL="redis://:your-redis-password@127.0.0.1:6379"
+#
+# If docker-compose.yml is already using 3306/6379, run this stack on other host ports, e.g.:
+#   MYSQL_PUBLISH_PORT=3307 REDIS_PUBLISH_PORT=6380 docker compose -f docker-compose-product.yml up -d
+
+name: buzzy-prod
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-buzzy}
+      MYSQL_USER: ${MYSQL_USER:-buzzy}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PUBLISH_HOST:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
+    volumes:
+      - mysql_prod_data:/var/lib/mysql
+    command:
+      ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PUBLISH_HOST:-127.0.0.1}:${REDIS_PUBLISH_PORT:-6379}:6379"
+    volumes:
+      - redis_prod_data:/data
+    # AOF persistence. Leave REDIS_PASSWORD empty for no auth (dev parity); set it in production.
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --appendonly yes
+        fi
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" ping; else redis-cli ping; fi | grep -q PONG',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  mysql_prod_data:
+  redis_prod_data:
