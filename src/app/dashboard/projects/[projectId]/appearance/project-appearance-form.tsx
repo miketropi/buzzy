@@ -560,42 +560,8 @@ export function ProjectAppearanceForm({
             <strong className="font-medium text-slate-800 dark:text-zinc-200">Options</strong> /{" "}
             <strong className="font-medium text-slate-800 dark:text-zinc-200">Preview</strong> on small screens.
           </p>
-          <p className="mt-3 text-sm">
-            <span className="font-medium text-slate-700 dark:text-zinc-300">Preview mode</span>{" "}
-            <span className="text-slate-900 dark:text-white">
-              {WIDGET_MODE_PREVIEW[normalizeWidgetMode(previewWidgetMode)].headline}
-            </span>
-            <span className="mt-1 block text-xs text-slate-500 dark:text-zinc-500">
-              {WIDGET_MODE_PREVIEW[normalizeWidgetMode(previewWidgetMode)].description}
-            </span>
-          </p>
         </div>
-        <div className="flex shrink-0 gap-2 sm:pt-1">
-          <button
-            type="button"
-            onClick={() => setMobileTab("options")}
-            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-              mobileTab === "options"
-                ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
-                : "text-slate-600 dark:text-zinc-400"
-            }`}
-          >
-            <Settings2 className="h-4 w-4" />
-            Options
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab("preview")}
-            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-              mobileTab === "preview"
-                ? "bg-brand-muted text-brand-ink ring-1 ring-brand/25 dark:bg-brand/15 dark:text-brand"
-                : "text-slate-600 dark:text-zinc-400"
-            }`}
-          >
-            <Eye className="h-4 w-4" />
-            Preview
-          </button>
-        </div>
+        
       </div>
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">

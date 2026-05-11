@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { KeyRound, UserRound } from "lucide-react";
+import { ArrowUpRight, KeyRound, Mail, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
@@ -11,6 +11,55 @@ type AccountClientProps = {
   initialEmail: string;
   initialAvatarUrl: string;
 };
+
+function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-[0.8125rem] font-semibold tracking-[-0.01em] text-[var(--foreground)]"
+    >
+      {children}
+    </label>
+  );
+}
+
+function FieldLegend({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-1.5 flex text-[0.8125rem] font-semibold tracking-[-0.01em] text-[var(--foreground)]">
+      {children}
+    </div>
+  );
+}
+
+function AlertSuccess({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="rounded-xl border px-3.5 py-2.5 text-[0.8125rem] leading-snug text-emerald-900 dark:text-emerald-100"
+      style={{
+        borderColor: "color-mix(in srgb, rgb(16 185 129) 28%, var(--border))",
+        background: "color-mix(in srgb, rgb(16 185 129) 7%, var(--surface))",
+      }}
+      role="status"
+    >
+      {children}
+    </p>
+  );
+}
+
+function AlertError({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="rounded-xl border px-3.5 py-2.5 text-[0.8125rem] leading-snug text-red-900 dark:text-red-100"
+      style={{
+        borderColor: "color-mix(in srgb, rgb(239 68 68) 30%, var(--border))",
+        background: "color-mix(in srgb, rgb(239 68 68) 7%, var(--surface))",
+      }}
+      role="alert"
+    >
+      {children}
+    </p>
+  );
+}
 
 export function AccountClient({
   initialName,
@@ -102,206 +151,195 @@ export function AccountClient({
   }
 
   return (
-    <div className="space-y-8 pb-8">
-      <div>
+    <div className="space-y-6 pb-10 md:space-y-8">
+      <header className="dash-hero">
         <p className="dash-kicker">Account</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--foreground)] md:text-3xl">
+        <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--foreground)] md:text-[1.75rem]">
           Your profile
         </h1>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--muted)]">
-          Update how you appear in the dashboard and change your password. Your sign-in email cannot be changed
-          here. Your avatar comes from{" "}
+        <p className="mt-2 max-w-xl text-[0.9375rem] leading-relaxed text-[var(--muted)]">
+          How you appear in the dashboard header, and credentials for signing in. Your email can’t be changed here;
+          profile photos come from{" "}
           <a
             href="https://gravatar.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-brand underline-offset-2 hover:underline"
+            className="font-semibold text-brand underline-offset-[3px] transition hover:text-brand-hover hover:underline"
           >
             Gravatar
           </a>{" "}
-          (hashed from your email).
+          (derived from your address).
         </p>
-      </div>
+      </header>
 
-      <div className="dash-panel overflow-hidden">
-        <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-          <section className="p-5 sm:p-6 lg:p-7">
-            <div className="mb-6 flex flex-col gap-6 sm:flex-row sm:items-start">
-              <div className="shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element -- Gravatar external URL */}
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  width={96}
-                  height={96}
-                  className="h-24 w-24 rounded-2xl border object-cover ring-2 ring-[var(--border)]"
-                  style={{ borderColor: "var(--border)" }}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-5 flex items-start gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand ring-1 ring-brand/20 dark:bg-brand/20">
-                    <UserRound className="h-5 w-5" strokeWidth={2} aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="text-base font-semibold tracking-tight text-[var(--foreground)]">Profile</h2>
-                    <p className="mt-1 text-sm leading-snug text-[var(--muted)]">
-                      Display name for the dashboard. To change your photo, update the image tied to your email on
-                      Gravatar.
-                    </p>
-                  </div>
-                </div>
-
-                <form onSubmit={onProfileSubmit} className="max-w-md space-y-4">
-                  {profileError ? (
-                    <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
-                      {profileError}
-                    </p>
-                  ) : null}
-                  {profileMessage ? (
-                    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                      {profileMessage}
-                    </p>
-                  ) : null}
-
-                  <div>
-                    <p className="block text-sm font-medium text-[var(--foreground)]">Email</p>
-                    <p
-                      className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
-                      title={initialEmail}
-                    >
-                      {initialEmail}
-                    </p>
-                    <p className="mt-1.5 text-xs text-[var(--muted)]">
-                      Sign-in address cannot be changed in the dashboard.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label htmlFor="account-name" className="block text-sm font-medium text-[var(--foreground)]">
-                      Display name
-                    </label>
-                    <input
-                      id="account-name"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      autoComplete="name"
-                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <button
-                      type="submit"
-                      disabled={profileLoading}
-                      className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover disabled:opacity-60"
-                    >
-                      {profileLoading ? "Saving…" : "Save profile"}
-                    </button>
-                    <Link
-                      href="https://gravatar.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-brand underline-offset-2 hover:underline"
-                    >
-                      Open Gravatar
-                    </Link>
-                  </div>
-                </form>
-              </div>
+      <section className="dash-panel overflow-hidden p-0" aria-labelledby="account-profile-heading">
+        <div className="border-b border-[var(--border)] bg-gradient-to-b from-[var(--surface-muted)]/55 to-transparent px-5 py-4 md:px-6">
+          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Identity</p>
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Gravatar external URL */}
+              <img
+                src={avatarUrl}
+                alt=""
+                width={96}
+                height={96}
+                className="h-[5.75rem] w-[5.75rem] rounded-[1.25rem] border object-cover shadow-sm ring-[3px] ring-[var(--surface)] outline outline-1 outline-[var(--border)]"
+              />
+              <p className="mt-2 max-w-[11rem] text-center text-[0.625rem] leading-snug text-[var(--muted)] sm:text-left">
+                Synced via Gravatar
+              </p>
             </div>
-          </section>
-
-          <section className="p-5 sm:p-6 lg:p-7">
-            <div className="mb-5 flex items-start gap-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand ring-1 ring-brand/20 dark:bg-brand/20">
-                <KeyRound className="h-5 w-5" strokeWidth={2} aria-hidden />
+            <div className="flex min-w-0 flex-1 gap-3 sm:items-start">
+              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand/14 text-brand ring-1 ring-brand/22">
+                <UserRound className="h-5 w-5" strokeWidth={2} aria-hidden />
               </span>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold tracking-tight text-[var(--foreground)]">Password</h2>
-                <p className="mt-1 text-sm leading-snug text-[var(--muted)]">
-                  Use at least 8 characters. You will stay signed in on this device.
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="account-profile-heading"
+                  className="text-lg font-semibold tracking-[-0.02em] text-[var(--foreground)]"
+                >
+                  Display name & email
+                </h2>
+                <p className="mt-1 text-[0.8125rem] leading-relaxed text-[var(--muted)]">
+                  Adjust your dashboard name below. Avatar uses the image tied to your email on Gravatar.
                 </p>
               </div>
             </div>
+          </div>
+        </div>
 
-            <form onSubmit={onPasswordSubmit} className="max-w-md space-y-4">
-              {passwordError ? (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
-                  {passwordError}
-                </p>
-              ) : null}
-              {passwordMessage ? (
-                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                  {passwordMessage}
-                </p>
-              ) : null}
+        <div className="p-5 md:px-6 md:pb-6 md:pt-5">
+          <form onSubmit={onProfileSubmit} className="mx-auto max-w-md space-y-4">
+            {profileError ? <AlertError>{profileError}</AlertError> : null}
+            {profileMessage ? <AlertSuccess>{profileMessage}</AlertSuccess> : null}
 
-              <div>
-                <label
-                  htmlFor="account-current-password"
-                  className="block text-sm font-medium text-[var(--foreground)]"
-                >
-                  Current password
-                </label>
-                <input
-                  id="account-current-password"
-                  type="password"
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  autoComplete="current-password"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="account-new-password" className="block text-sm font-medium text-[var(--foreground)]">
-                  New password
-                </label>
-                <input
-                  id="account-new-password"
-                  type="password"
-                  required
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  autoComplete="new-password"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="account-confirm-password"
-                  className="block text-sm font-medium text-[var(--foreground)]"
-                >
-                  Confirm new password
-                </label>
-                <input
-                  id="account-confirm-password"
-                  type="password"
-                  required
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={passwordLoading}
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--surface-muted)] disabled:opacity-60"
+            <div>
+              <FieldLegend>
+                <span className="inline-flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5 opacity-70" strokeWidth={2} aria-hidden />
+                  Email
+                </span>
+              </FieldLegend>
+              <div
+                id="account-email-readonly"
+                className="rounded-xl border px-3.5 py-2.5 text-[0.875rem] text-[var(--foreground)] opacity-92"
+                style={{
+                  borderColor: "var(--border)",
+                  background: "var(--surface-muted)",
+                }}
               >
+                {initialEmail}
+              </div>
+              <p className="mt-1.5 text-[0.7rem] leading-relaxed text-[var(--muted)]">
+                Sign-in address isn’t editable in the dashboard.
+              </p>
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="account-name">Display name</FieldLabel>
+              <input
+                id="account-name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                className="input-buzzy mt-1.5"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button type="submit" disabled={profileLoading} className="btn-primary text-sm disabled:opacity-60">
+                {profileLoading ? "Saving…" : "Save profile"}
+              </button>
+              <Link
+                href="https://gravatar.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary gap-2 text-sm"
+              >
+                Gravatar site
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-75" strokeWidth={2} aria-hidden />
+              </Link>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section className="dash-panel overflow-hidden p-0" aria-labelledby="account-password-heading">
+        <div className="border-b border-[var(--border)] bg-gradient-to-b from-[var(--surface-muted)]/55 to-transparent px-5 py-4 md:px-6">
+          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Security</p>
+          <div className="mt-3 flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand/14 text-brand ring-1 ring-brand/22">
+              <KeyRound className="h-5 w-5" strokeWidth={2} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2
+                id="account-password-heading"
+                className="text-lg font-semibold tracking-[-0.02em] text-[var(--foreground)]"
+              >
+                Password
+              </h2>
+              <p className="mt-1 text-[0.8125rem] leading-relaxed text-[var(--muted)]">
+                Minimum 8 characters. You’ll remain signed in on this device after a successful update.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 md:px-6 md:pb-6 md:pt-5">
+          <form onSubmit={onPasswordSubmit} className="mx-auto max-w-md space-y-4">
+            {passwordError ? <AlertError>{passwordError}</AlertError> : null}
+            {passwordMessage ? <AlertSuccess>{passwordMessage}</AlertSuccess> : null}
+
+            <div>
+              <FieldLabel htmlFor="account-current-password">Current password</FieldLabel>
+              <input
+                id="account-current-password"
+                type="password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+                className="input-buzzy mt-1.5"
+              />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="account-new-password">New password</FieldLabel>
+              <input
+                id="account-new-password"
+                type="password"
+                required
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                className="input-buzzy mt-1.5"
+              />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="account-confirm-password">Confirm new password</FieldLabel>
+              <input
+                id="account-confirm-password"
+                type="password"
+                required
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                className="input-buzzy mt-1.5"
+              />
+            </div>
+
+            <div className="pt-1">
+              <button type="submit" disabled={passwordLoading} className="btn-secondary text-sm disabled:opacity-60">
                 {passwordLoading ? "Updating…" : "Change password"}
               </button>
-            </form>
-          </section>
+            </div>
+          </form>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

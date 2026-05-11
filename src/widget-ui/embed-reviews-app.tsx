@@ -22,6 +22,7 @@ import {
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 import { widgetShouldShowTurnstileUi } from "@/lib/public-api/captcha-ui";
 import { BzTurnstile } from "./bz-turnstile";
+import { nearestVerticalScrollIntersectionRoot } from "./infinite-scroll-intersect";
 
 type Features = {
   allow_anonymous?: boolean;
@@ -30,6 +31,19 @@ type Features = {
 };
 
 type ApiReview = ReviewFeedItem;
+
+const REVIEW_PAGE_SIZE = 20;
+
+function cloneReviews(list: ApiReview[]): ApiReview[] {
+  return typeof structuredClone === "function"
+    ? structuredClone(list)
+    : (JSON.parse(JSON.stringify(list)) as ApiReview[]);
+}
+
+type ReviewsListMeta = {
+  cursor?: string;
+  hasMore?: boolean;
+};
 
 export function EmbedReviewsApp({
   ctx,
@@ -83,8 +97,48 @@ export function EmbedReviewsApp({
   const [reportReviewId, setReportReviewId] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaNonce, setCaptchaNonce] = useState(0);
+  const [reviewNextCursor, setReviewNextCursor] = useState<string | null>(null);
+  const [reviewHasMore, setReviewHasMore] = useState(false);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
 
   const editorRef = useRef<BzCommentEditorRef>(null);
+  const reviewSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const reviewsRef = useRef(reviews);
+  const reviewNextCursorRef = useRef(reviewNextCursor);
+  const reviewHasMoreRef = useRef(reviewHasMore);
+  const loadingMoreReviewsRef = useRef(false);
+
+  useEffect(() => {
+    reviewsRef.current = reviews;
+  }, [reviews]);
+  useEffect(() => {
+    reviewNextCursorRef.current = reviewNextCursor;
+  }, [reviewNextCursor]);
+  useEffect(() => {
+    reviewHasMoreRef.current = reviewHasMore;
+  }, [reviewHasMore]);
+
+  const applyReviewCursorMeta = useCallback((meta: ReviewsListMeta | undefined | null) => {
+    const c = typeof meta?.cursor === "string" ? meta.cursor : null;
+    const hm = Boolean(meta?.hasMore && c);
+    setReviewNextCursor(hm ? c : null);
+    setReviewHasMore(hm);
+  }, []);
+
+  const fetchReviewsPage = useCallback(
+    async (cursor: string | undefined) => {
+      const q = new URLSearchParams();
+      q.set("key", ctx.key);
+      q.set("page_url", ctx.pageUrl);
+      q.set("sort", "newest");
+      q.set("limit", String(REVIEW_PAGE_SIZE));
+      if (cursor) q.set("cursor", cursor);
+      const u = `${ctx.apiBase}/api/v1/reviews?${q.toString()}`;
+      return fetchJson(u) as Promise<{ data?: { reviews?: ApiReview[] }; meta?: ReviewsListMeta }>;
+    },
+    [ctx.apiBase, ctx.key, ctx.pageUrl],
+  );
 
   const loadSummary = useCallback(() => {
     if (!ratingEnabled) return Promise.resolve();
@@ -101,25 +155,105 @@ export function EmbedReviewsApp({
     });
   }, [ratingEnabled, ctx.apiBase, ctx.key, ctx.pageUrl]);
 
-  const loadList = useCallback(() => {
-    if (!ratingEnabled) return Promise.resolve();
-    const u =
-      ctx.apiBase +
-      "/api/v1/reviews?key=" +
-      encodeURIComponent(ctx.key) +
-      "&page_url=" +
-      encodeURIComponent(ctx.pageUrl) +
-      "&sort=newest";
-    return fetchJson(u).then((j) => {
-      let list = ((j.data as { reviews?: ApiReview[] })?.reviews || []) as ApiReview[];
-      if (ratingOnly && list.length > 3) list = list.slice(0, 3);
-      setReviews(
-        typeof structuredClone === "function"
-          ? structuredClone(list)
-          : (JSON.parse(JSON.stringify(list)) as ApiReview[]),
-      );
-    });
-  }, [ratingEnabled, ctx.apiBase, ctx.key, ctx.pageUrl, ratingOnly]);
+  const loadList = useCallback(async () => {
+    if (!ratingEnabled) return;
+    const j = await fetchReviewsPage(undefined);
+    let list = (j.data?.reviews ?? []) as ApiReview[];
+    if (ratingOnly) {
+      if (list.length > 3) list = list.slice(0, 3);
+      setReviewNextCursor(null);
+      setReviewHasMore(false);
+    } else {
+      applyReviewCursorMeta(j.meta);
+    }
+    setReviews(cloneReviews(list));
+  }, [ratingEnabled, ratingOnly, fetchReviewsPage, applyReviewCursorMeta]);
+
+  const replenishReviewsQuietly = useCallback(async () => {
+    if (!ratingEnabled) return;
+    try {
+      if (ratingOnly) {
+        await loadList();
+        return;
+      }
+      const need = reviewsRef.current.length;
+      if (need === 0) {
+        const j = await fetchReviewsPage(undefined);
+        const list = (j.data?.reviews ?? []) as ApiReview[];
+        setReviews(cloneReviews(list));
+        applyReviewCursorMeta(j.meta);
+        return;
+      }
+      let acc: ApiReview[] = [];
+      let cursor: string | undefined;
+      let lastMeta: ReviewsListMeta | undefined;
+      while (true) {
+        const j = await fetchReviewsPage(cursor);
+        lastMeta = j.meta;
+        const chunk = (j.data?.reviews ?? []) as ApiReview[];
+        acc = [...acc, ...chunk];
+        const c = typeof j.meta?.cursor === "string" && j.meta.hasMore ? j.meta.cursor : undefined;
+        if (!chunk.length || !j.meta?.hasMore || !c) break;
+        if (acc.length >= need) break;
+        cursor = c;
+      }
+      setReviews(cloneReviews(acc));
+      applyReviewCursorMeta(lastMeta);
+    } catch {
+      try {
+        const j = await fetchReviewsPage(undefined);
+        let list = (j.data?.reviews ?? []) as ApiReview[];
+        if (ratingOnly && list.length > 3) list = list.slice(0, 3);
+        setReviews(cloneReviews(list));
+        applyReviewCursorMeta(j.meta);
+      } catch {
+        /* leave list unchanged */
+      }
+    }
+  }, [ratingEnabled, ratingOnly, fetchReviewsPage, applyReviewCursorMeta, loadList]);
+
+  const loadMoreReviews = useCallback(async () => {
+    if (
+      ratingOnly ||
+      loadingMoreReviewsRef.current ||
+      !reviewHasMoreRef.current ||
+      reviewNextCursorRef.current == null ||
+      reviewNextCursorRef.current === ""
+    ) {
+      return;
+    }
+    const cur = reviewNextCursorRef.current;
+    loadingMoreReviewsRef.current = true;
+    setLoadingMoreReviews(true);
+    setErr("");
+    try {
+      const j = await fetchReviewsPage(cur);
+      const chunk = (j.data?.reviews ?? []) as ApiReview[];
+      setReviews((prev) => [...prev, ...cloneReviews(chunk)]);
+      applyReviewCursorMeta(j.meta);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      loadingMoreReviewsRef.current = false;
+      setLoadingMoreReviews(false);
+    }
+  }, [ratingOnly, fetchReviewsPage, applyReviewCursorMeta]);
+
+  useEffect(() => {
+    if (ratingOnly || !ratingEnabled || !reviewHasMore || reviews.length === 0) return;
+    const el = reviewSentinelRef.current;
+    if (!el) return;
+    const root = nearestVerticalScrollIntersectionRoot(el);
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        void loadMoreReviews();
+      },
+      { root, rootMargin: "160px", threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ratingOnly, ratingEnabled, reviewHasMore, reviews.length, reviewNextCursor, loadMoreReviews]);
 
   useEffect(() => {
     const sync = () => {
@@ -319,7 +453,7 @@ export function EmbedReviewsApp({
         setRichDraftHtml("<p></p>");
         if (enableRich) editorRef.current?.clear();
         closeComposer();
-        return Promise.all([loadSummary(), loadList()]);
+        return Promise.all([loadSummary(), replenishReviewsQuietly()]);
       })
       .catch((e: Error) => {
         setErr(e.message || String(e));
@@ -393,13 +527,26 @@ export function EmbedReviewsApp({
 
       <div className="bz-embed-section">
         <p className="bz-head">{heading}</p>
-        <div className="bz-thread-entries">
+        <div className="bz-thread-entries" aria-busy={loadingMoreReviews}>
           {reviews.length ? (
-            <WidgetReviewFeed
-              reviews={reviews}
-              scale={scale}
-              onReportReview={(id) => setReportReviewId(id)}
-            />
+            <>
+              <WidgetReviewFeed
+                reviews={reviews}
+                scale={scale}
+                onReportReview={(id) => setReportReviewId(id)}
+              />
+              {!ratingOnly && reviewHasMore ? (
+                <>
+                  <div ref={reviewSentinelRef} className="bz-load-more-sentinel" aria-hidden />
+                  {loadingMoreReviews ? (
+                    <>
+                      <span className="bz-sr-only">Loading more reviews…</span>
+                      <p className="bz-meta bz-load-more-skel-wrap">Loading more…</p>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </>
           ) : ratingOnly ? null : (
             <p className="bz-meta">No reviews yet.</p>
           )}

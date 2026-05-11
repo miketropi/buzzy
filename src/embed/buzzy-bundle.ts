@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { WIDGET_CHROME_STRUCTURAL_SHADOW } from "../lib/generated/widget-chrome-shadow";
 import { buildShadowWidgetStylesheet, widgetConfigToTokenInput } from "../lib/widget-chrome-tokens";
+import { WIDGET_BOOT_PLACEHOLDER_HTML } from "./widget-boot-skeleton";
 import { normalizeApiBase as normalizeApiBaseFromFetch, fetchJson } from "./embed-fetch";
 import { replaceEmbedProfile, setEmbedProfile, type EmbedUserProfile } from "./embed-profile";
 import { setHostIdentityToken } from "./embed-host-identity";
@@ -157,11 +158,15 @@ function boot(host: HTMLElement, ctx: BuzzyBootCtx) {
   applyBootProfile(host, ctx.userProfile);
   applyBootHostIdentity(ctx.hostIdentity);
   const shadow = host.attachShadow({ mode: "open" });
-  const loading = document.createElement("div");
-  loading.className = "bz";
-  loading.style.padding = "1rem";
-  loading.textContent = "Loading…";
-  shadow.appendChild(loading);
+  const placeholderTokens = widgetConfigToTokenInput({ theme: "auto" }, prefersDark());
+  const placeholderStyle = document.createElement("style");
+  placeholderStyle.textContent = buildShadowWidgetStylesheet(".bz", placeholderTokens, WIDGET_CHROME_STRUCTURAL_SHADOW);
+  const placeholderRoot = document.createElement("div");
+  placeholderRoot.className = `bz bz-btn-style--${placeholderTokens.submitButtonStyle} bz-text-scale--${placeholderTokens.composerTextScale}`;
+  placeholderRoot.innerHTML = WIDGET_BOOT_PLACEHOLDER_HTML;
+  placeholderRoot.setAttribute("aria-busy", "true");
+  shadow.appendChild(placeholderStyle);
+  shadow.appendChild(placeholderRoot);
 
   let apiBase = normalizeApiBase(ctx.apiBase || "");
   if (!apiBase) apiBase = scriptOrigin() || globalThis.location.origin;
@@ -170,7 +175,7 @@ function boot(host: HTMLElement, ctx: BuzzyBootCtx) {
   fetchJson(cfgUrl)
     .then(async (j) => {
       const cfg = (j.data || {}) as Record<string, unknown>;
-      shadow.removeChild(loading);
+      shadow.innerHTML = "";
       const panel = applyShell(shadow, cfg);
       let mode = ctx.modeOverride || (cfg.widget_mode as string) || "comment";
       if (mode !== "comment" && mode !== "review" && mode !== "rating") mode = "comment";

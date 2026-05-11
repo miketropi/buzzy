@@ -57,19 +57,24 @@ export async function GET(request: NextRequest) {
     const page = await findPageByProjectAndUrl(ctx.project.id, q.page_url);
 
     if (!page) {
-      return jsonSuccess({ comments: [] }, { hasMore: false });
+      return jsonSuccess({ comments: [] }, { hasMore: false, total: 0 });
     }
 
     const settings = getEffectiveSettings(ctx.project.settings);
     const limit = clampLimit(q.limit, 20, 50);
     /** Upsert host SSO viewer before listing so joined `commenter` rows match DB (avoids stale name/avatar for the viewer’s rows). */
     const sessionCommenterId = await resolveSessionCommenterId(request, ctx.project, settings);
-    const { roots, flatReplies, nextCursor, hasMore } = await listCommentsForPage({
-      pageId: page.id,
-      sort: q.sort,
-      cursor: q.cursor,
-      limit,
-    });
+    const [{ roots, flatReplies, nextCursor, hasMore }, total] = await Promise.all([
+      listCommentsForPage({
+        pageId: page.id,
+        sort: q.sort,
+        cursor: q.cursor,
+        limit,
+      }),
+      prisma.comment.count({
+        where: { pageId: page.id, status: "approved" },
+      }),
+    ]);
     const nested = nestPublicComments(roots, flatReplies, sessionCommenterId);
     if (sessionCommenterId) {
       const ids = collectCommentIdsFromTree(nested);
@@ -87,7 +92,7 @@ export async function GET(request: NextRequest) {
     }
     return jsonSuccess(
       { comments: nested },
-      { cursor: nextCursor, hasMore },
+      { cursor: nextCursor, hasMore, total },
     );
   });
 }

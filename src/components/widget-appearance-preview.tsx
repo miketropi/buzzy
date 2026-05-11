@@ -376,12 +376,20 @@ export function WidgetAppearancePreview({
     );
   }
 
-  function threadPanel(opts: { title: string; entries: ReactNode; footer: ReactNode }) {
+  function threadPanel(opts: {
+    title: string;
+    toolbar?: ReactNode;
+    entries: ReactNode;
+    footer: ReactNode;
+    serviceFooter?: ReactNode;
+  }) {
     return (
       <div className="bz-embed-section">
         <p className="bz-head">{opts.title}</p>
+        {opts.toolbar ?? null}
         <div className="bz-thread-entries">{opts.entries}</div>
         {opts.footer}
+        {opts.serviceFooter ?? null}
       </div>
     );
   }
@@ -392,6 +400,24 @@ export function WidgetAppearancePreview({
       <>
         {threadPanel({
           title: "Comments",
+          toolbar: (
+            <div className="bz-widget-toolbar">
+              <span className="bz-widget-toolbar-count">{listBodies.length} comments</span>
+              <div className="bz-widget-toolbar-sort">
+                <nav className="bz-widget-sort-nav" aria-label="Sort comments (preview)">
+                  <button type="button" className="bz-sort-nav-btn bz-sort-nav-btn--active" disabled aria-current="page">
+                    Newest
+                  </button>
+                  <button type="button" className="bz-sort-nav-btn" disabled>
+                    Oldest
+                  </button>
+                  <button type="button" className="bz-sort-nav-btn" disabled>
+                    Top
+                  </button>
+                </nav>
+              </div>
+            </div>
+          ),
           entries: buildCommentEntries(),
           footer: inlineComposerBlock({
             ctaLabel: "Write a comment",
@@ -401,6 +427,11 @@ export function WidgetAppearancePreview({
             stepLabels: ["Profile", "Files"],
             step0: commentStepIntro,
           }),
+          serviceFooter: (
+            <div className="bz-widget-footer" role="note">
+              <span className="bz-widget-footer-inner">Service: buzzy.app</span>
+            </div>
+          ),
         })}
       </>
     );

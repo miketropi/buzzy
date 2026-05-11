@@ -58,6 +58,245 @@ export const WIDGET_CHROME_STRUCTURAL_SCOPED = `/**
   opacity: 1;
 }
 
+/* Comment thread toolbar (count + sort) */
+.buzzy-widget-scope .bz-widget-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bz-space-2) var(--bz-space-4);
+  margin-bottom: var(--bz-space-2);
+  padding: var(--bz-space-2) var(--bz-space-3);
+  border-radius: var(--bz-control-r);
+  background: color-mix(in srgb, var(--bz-input-bg) 58%, transparent);
+  border: 1px solid var(--bz-border-soft);
+}
+
+.buzzy-widget-scope .bz-widget-toolbar-count {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--bz-muted);
+  font-weight: 500;
+}
+
+.buzzy-widget-scope .bz-widget-toolbar-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--bz-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.buzzy-widget-scope .bz-widget-sort-nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bz-space-1);
+  padding: var(--bz-space-1);
+  margin: 0;
+  border-radius: var(--bz-control-r);
+  background: color-mix(in srgb, var(--bz-bg) 35%, var(--bz-border-soft) 65%);
+  border: 1px solid color-mix(in srgb, var(--bz-border-soft) 80%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bz-fg) 6%, transparent);
+}
+
+.buzzy-widget-scope .bz-sort-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--bz-muted);
+  background: transparent;
+  padding: 0.375rem 0.7rem;
+  border-radius: calc(var(--bz-control-r) - 2px);
+  transition:
+    background-color var(--bz-motion-sm) var(--bz-ease-standard),
+    color var(--bz-motion-sm) var(--bz-ease-standard),
+    box-shadow var(--bz-motion-sm) var(--bz-ease-standard),
+    border-color var(--bz-motion-sm) var(--bz-ease-standard);
+}
+
+.buzzy-widget-scope .bz-sort-nav-btn:hover:not(:disabled):not(.bz-sort-nav-btn--active) {
+  color: color-mix(in srgb, var(--bz-fg) 92%, var(--bz-muted));
+  background: color-mix(in srgb, var(--bz-input-bg) 55%, transparent);
+}
+
+.buzzy-widget-scope .bz-sort-nav-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bz-bg), 0 0 0 4px color-mix(in srgb, var(--bz-p) 45%, var(--bz-border-soft));
+}
+
+.buzzy-widget-scope .bz-sort-nav-btn--active {
+  cursor: default;
+  color: var(--bz-fg);
+  font-weight: 600;
+  background: var(--bz-input-bg);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--bz-fg) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bz-fg) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bz-border) 42%, var(--bz-border-soft));
+}
+
+.buzzy-widget-scope .bz-sort-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------- Loading skeletons (embed thread) ---------- */
+
+@keyframes bz-skeleton-shimmer-move {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+.buzzy-widget-scope .bz-skeleton-shimmer {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--bz-muted) 8%, var(--bz-input-bg)) 0%,
+    color-mix(in srgb, var(--bz-muted) 26%, var(--bz-input-bg)) 42%,
+    color-mix(in srgb, var(--bz-muted) 8%, var(--bz-input-bg)) 85%
+  );
+  background-size: 240% 100%;
+  animation: bz-skeleton-shimmer-move 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buzzy-widget-scope .bz-skeleton-shimmer {
+    animation: none;
+    background: color-mix(in srgb, var(--bz-muted) 14%, var(--bz-input-bg));
+  }
+}
+
+.buzzy-widget-scope .bz-skeleton-toolbar-count {
+  display: inline-block;
+  vertical-align: middle;
+  width: clamp(7rem, 42%, 11rem);
+  height: 0.8125rem;
+  border-radius: 999px;
+}
+
+/* Boot placeholder (before config loads) — title bar + sort pills + primary CTA */
+.buzzy-widget-scope .bz-boot-skel-title {
+  height: 1.125rem;
+  width: clamp(7rem, 55%, 10rem);
+  border-radius: 6px;
+  margin: 0 0 var(--bz-space-2);
+}
+
+.buzzy-widget-scope .bz-boot-skel-pill {
+  width: 4.125rem;
+  height: 2.125rem;
+  border-radius: calc(var(--bz-control-r) - 2px);
+}
+
+.buzzy-widget-scope .bz-boot-skel-cta {
+  width: 100%;
+  min-height: 2.75rem;
+  margin-top: 0.6rem;
+  border-radius: var(--bz-control-r);
+}
+
+.buzzy-widget-scope .bz-thread-skeleton-card {
+  pointer-events: none;
+}
+
+.buzzy-widget-scope .bz-skeleton-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.buzzy-widget-scope .bz-skeleton-text-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.12rem;
+}
+
+.buzzy-widget-scope .bz-skeleton-name-line {
+  height: 0.72rem;
+  width: clamp(8rem, 46%, 12rem);
+  border-radius: 999px;
+}
+
+.buzzy-widget-scope .bz-skeleton-line {
+  height: 0.65rem;
+  border-radius: 999px;
+  width: 100%;
+}
+
+.buzzy-widget-scope .bz-skeleton-line--narrow {
+  width: 76%;
+}
+
+.buzzy-widget-scope .bz-skeleton-line--medium {
+  width: 56%;
+}
+
+.buzzy-widget-scope .bz-thread-skeleton-card:nth-child(2) .bz-skeleton-line--narrow {
+  width: 62%;
+}
+
+.buzzy-widget-scope .bz-thread-skeleton-card:nth-child(3) .bz-skeleton-line--medium {
+  width: 48%;
+}
+
+.buzzy-widget-scope .bz-load-more-sentinel {
+  min-height: 4px;
+  height: 4px;
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.buzzy-widget-scope .bz-load-more-skel-wrap {
+  margin-top: 0.35rem;
+  opacity: 0.88;
+}
+
+/* Service attribution under the embed */
+.buzzy-widget-scope .bz-widget-footer {
+  margin-top: var(--bz-space-1);
+  padding-top: var(--bz-space-3);
+  border-top: 1px solid var(--bz-border-soft);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--bz-muted);
+  text-align: center;
+}
+
+.buzzy-widget-scope .bz-widget-footer-inner {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+@media (max-width: 639.98px) {
+  .buzzy-widget-scope .bz-widget-footer-inner {
+    white-space: normal;
+    text-align: center;
+  }
+}
+
 @media (min-width: 640px) {
   .buzzy-widget-scope .bz-head {
     font-size: 1.125rem;
@@ -2100,9 +2339,17 @@ export const WIDGET_CHROME_STRUCTURAL_SCOPED = `/**
 /* Composer modal (multi-step comment / review) */
 
 .buzzy-widget-scope .bz-comp--cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   margin-top: 1.35rem;
-  padding-top: 1.35rem;
+  padding-top: 1rem;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--bz-space-3));
   border-top: 1px solid var(--bz-ios-separator);
+  background: var(--bz-bg);
+  box-shadow:
+    0 -12px 28px -18px color-mix(in srgb, var(--bz-fg) 22%, transparent),
+    0 -1px 0 color-mix(in srgb, var(--bz-bg) 40%, transparent);
 }
 
 .buzzy-widget-scope .bz-comp-reply-hint {

@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchJson } from "../embed/embed-fetch";
 import { getStoredToken, setStoredToken } from "../embed/embed-auth";
-import { BUZZY_HOST_IDENTITY_EVENT, decodeHostIdentityPayloadForDisplay, getHostIdentityToken } from "../embed/embed-host-identity";
+import {
+  BUZZY_HOST_IDENTITY_EVENT,
+  decodeHostIdentityPayloadForDisplay,
+  getHostIdentityToken,
+} from "../embed/embed-host-identity";
 import { BUZZY_PROFILE_EVENT, getEmbedProfile } from "../embed/embed-profile";
-import { CommentThreadContext, type CommentForEdit, type CommentThreadContextValue } from "./comment-thread-context";
+import {
+  CommentThreadContext,
+  type CommentForEdit,
+  type CommentThreadContextValue,
+} from "./comment-thread-context";
 import { WidgetCommentThread, type ThreadComment } from "./bz-comment-card";
 import { BzAttachmentsPanel } from "./bz-attachments-panel";
 import { BzAttachmentsDisplay } from "./bz-attachments-display";
@@ -22,6 +30,42 @@ import {
 import { useHostIdentityProvisioned } from "./use-host-identity-provisioned";
 import { widgetShouldShowTurnstileUi } from "@/lib/public-api/captcha-ui";
 import { BzTurnstile } from "./bz-turnstile";
+import { BzCommentsThreadSkeleton } from "./bz-comments-skeleton";
+import { nearestVerticalScrollIntersectionRoot } from "./infinite-scroll-intersect";
+
+type CommentSort = "newest" | "oldest" | "popular";
+
+const COMMENT_SORT_NAV: { value: CommentSort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "popular", label: "Top" },
+];
+
+/** Cursor pages are root threads; replies load with each slice (see listCommentsForPage). */
+const COMMENT_PAGE_SIZE = 20;
+
+function cloneThreadComments(list: ThreadComment[]): ThreadComment[] {
+  return typeof structuredClone === "function"
+    ? structuredClone(list)
+    : (JSON.parse(JSON.stringify(list)) as ThreadComment[]);
+}
+
+type CommentsFetchMeta = {
+  total?: number;
+  cursor?: string;
+  hasMore?: boolean;
+};
+
+function parseServiceHostname(apiBase: string): string | null {
+  try {
+    const trimmed = apiBase.trim().replace(/\/$/, "");
+    const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const h = new URL(withProto).hostname;
+    return h || null;
+  } catch {
+    return null;
+  }
+}
 
 type Features = {
   allow_anonymous?: boolean;
@@ -59,6 +103,11 @@ export function EmbedCommentsApp({
       : undefined;
 
   const [rows, setRows] = useState<ThreadComment[]>([]);
+  const [sort, setSort] = useState<CommentSort>("newest");
+  const [approvedCommentTotal, setApprovedCommentTotal] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(() => getEmbedProfile().name ?? "");
@@ -86,25 +135,169 @@ export function EmbedCommentsApp({
 
   const editorRef = useRef<BzCommentEditorRef>(null);
   const plainRef = useRef<HTMLTextAreaElement>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const load = useCallback(() => {
+  const rowsRef = useRef(rows);
+  const nextCursorRef = useRef(nextCursor);
+  const hasMoreRef = useRef(hasMore);
+  const loadingRef = useRef(loading);
+  const loadingMoreRef = useRef(false);
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+  useEffect(() => {
+    nextCursorRef.current = nextCursor;
+  }, [nextCursor]);
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  const serviceHost = useMemo(() => parseServiceHostname(ctx.apiBase), [ctx.apiBase]);
+
+  const applyCursorMeta = useCallback((meta: CommentsFetchMeta | undefined | null) => {
+    const c = typeof meta?.cursor === "string" ? meta.cursor : null;
+    const hm = Boolean(meta?.hasMore && c);
+    setNextCursor(hm ? c : null);
+    setHasMore(hm);
+  }, []);
+
+  const fetchCommentsPage = useCallback(
+    async (cursor: string | undefined) => {
+      const q = new URLSearchParams();
+      q.set("key", ctx.key);
+      q.set("page_url", ctx.pageUrl);
+      q.set("sort", sort);
+      q.set("limit", String(COMMENT_PAGE_SIZE));
+      if (cursor) q.set("cursor", cursor);
+      const u = `${ctx.apiBase}/api/v1/comments?${q.toString()}`;
+      const tok = getStoredToken(ctx.key);
+      const headers: Record<string, string> = {};
+      if (tok) headers["X-Commenter-Token"] = tok;
+      const j = (await fetchJson(u, { headers })) as {
+        data?: { comments?: ThreadComment[] };
+        meta?: CommentsFetchMeta;
+      };
+      return j;
+    },
+    [ctx.apiBase, ctx.key, ctx.pageUrl, sort],
+  );
+
+  /** After votes / edits / posts, refetch root pages until list length is restored when possible. */
+  const replenishCommentsQuietly = useCallback(async () => {
+    const neededRoots = rowsRef.current.length;
+    try {
+      if (neededRoots === 0) {
+        const j = await fetchCommentsPage(undefined);
+        const list = ((j.data?.comments ?? []) as ThreadComment[]) || [];
+        setRows(cloneThreadComments(list));
+        if (typeof j.meta?.total === "number") setApprovedCommentTotal(j.meta.total);
+        else setApprovedCommentTotal(null);
+        applyCursorMeta(j.meta);
+        return;
+      }
+      let acc: ThreadComment[] = [];
+      let cursor: string | undefined;
+      let lastMeta: CommentsFetchMeta | undefined;
+      while (true) {
+        const j = await fetchCommentsPage(cursor);
+        lastMeta = j.meta;
+        const chunk = (j.data?.comments ?? []) as ThreadComment[];
+        acc = [...acc, ...chunk];
+        const c =
+          typeof j.meta?.cursor === "string" && j.meta.hasMore ? (j.meta.cursor as string) : undefined;
+        if (!chunk.length || !j.meta?.hasMore || !c) break;
+        if (acc.length >= neededRoots) break;
+        cursor = c;
+      }
+      setRows(cloneThreadComments(acc));
+      if (typeof lastMeta?.total === "number") setApprovedCommentTotal(lastMeta.total);
+      applyCursorMeta(lastMeta);
+    } catch {
+      try {
+        const j = await fetchCommentsPage(undefined);
+        const list = (j.data?.comments ?? []) as ThreadComment[];
+        setRows(cloneThreadComments(list));
+        if (typeof j.meta?.total === "number") setApprovedCommentTotal(j.meta.total);
+        applyCursorMeta(j.meta);
+      } catch {
+        /* keep visible list */
+      }
+    }
+  }, [fetchCommentsPage, applyCursorMeta]);
+
+  const load = useCallback(
+    async (opts?: { quiet?: boolean }) => {
+      setErr("");
+      if (!opts?.quiet) setLoading(true);
+      try {
+        const j = await fetchCommentsPage(undefined);
+        const list = ((j.data?.comments ?? []) as ThreadComment[]) || [];
+        setRows(cloneThreadComments(list));
+        if (typeof j.meta?.total === "number") setApprovedCommentTotal(j.meta.total);
+        else setApprovedCommentTotal(null);
+        applyCursorMeta(j.meta);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setErr(msg);
+        setRows([]);
+        setApprovedCommentTotal(null);
+        setNextCursor(null);
+        setHasMore(false);
+      } finally {
+        if (!opts?.quiet) setLoading(false);
+      }
+    },
+    [fetchCommentsPage, applyCursorMeta],
+  );
+
+  const loadMore = useCallback(async () => {
+    if (
+      loadingMoreRef.current ||
+      loadingRef.current ||
+      !hasMoreRef.current ||
+      nextCursorRef.current == null ||
+      nextCursorRef.current === ""
+    ) {
+      return;
+    }
+    const cur = nextCursorRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
     setErr("");
-    const u =
-      ctx.apiBase +
-      "/api/v1/comments?key=" +
-      encodeURIComponent(ctx.key) +
-      "&page_url=" +
-      encodeURIComponent(ctx.pageUrl) +
-      "&sort=newest";
-    const tok = getStoredToken(ctx.key);
-    const headers: Record<string, string> = {};
-    if (tok) headers["X-Commenter-Token"] = tok;
-    return fetchJson(u, { headers }).then((j) => {
-      const list = ((j.data as { comments?: ThreadComment[] })?.comments || []) as ThreadComment[];
-      setRows(typeof structuredClone === "function" ? structuredClone(list) : JSON.parse(JSON.stringify(list)) as ThreadComment[]);
-      setLoading(false);
-    });
-  }, [ctx.apiBase, ctx.key, ctx.pageUrl]);
+    try {
+      const j = await fetchCommentsPage(cur);
+      const chunk = ((j.data?.comments ?? []) as ThreadComment[]) || [];
+      setRows((prev) => [...prev, ...cloneThreadComments(chunk)]);
+      if (typeof j.meta?.total === "number") setApprovedCommentTotal(j.meta.total);
+      applyCursorMeta(j.meta);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [fetchCommentsPage, applyCursorMeta]);
+
+  useEffect(() => {
+    if (loading || !hasMore || rows.length === 0) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const root = nearestVerticalScrollIntersectionRoot(el);
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        void loadMore();
+      },
+      { root, rootMargin: "160px", threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loading, hasMore, rows.length, nextCursor, loadMore]);
+
 
   useEffect(() => {
     const sync = () => {
@@ -131,10 +324,7 @@ export function EmbedCommentsApp({
   }, []);
 
   useEffect(() => {
-    load().catch((e: Error) => {
-      setErr(e.message || String(e));
-      setLoading(false);
-    });
+    void load();
   }, [load]);
 
   const vote = useCallback(
@@ -156,14 +346,14 @@ export function EmbedCommentsApp({
           },
           body: { value },
         });
-        await load();
+        await replenishCommentsQuietly();
       } catch (e: unknown) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
         setVoteBusyId(null);
       }
     },
-    [ctx.apiBase, ctx.key, load],
+    [ctx.apiBase, ctx.key, replenishCommentsQuietly],
   );
 
   const onEditComment = useCallback(
@@ -347,7 +537,7 @@ export function EmbedCommentsApp({
           setRichDraftHtml("<p></p>");
           if (enableRich) editorRef.current?.clear();
           closeComposer();
-          return load();
+          void replenishCommentsQuietly();
         })
         .catch((e: Error) => {
           setErr(e.message || String(e));
@@ -456,7 +646,7 @@ export function EmbedCommentsApp({
         setRichDraftHtml("<p></p>");
         if (enableRich) editorRef.current?.clear();
         closeComposer();
-        return load();
+        void replenishCommentsQuietly();
       })
       .catch((e: Error) => {
         setErr(e.message || String(e));
@@ -487,16 +677,72 @@ export function EmbedCommentsApp({
       riskMinScore: captchaRiskMinScore,
     });
 
+  const countSummary =
+    !loading && approvedCommentTotal === null
+      ? "—"
+      : approvedCommentTotal !== null
+        ? `${approvedCommentTotal} ${approvedCommentTotal === 1 ? "comment" : "comments"}`
+        : null;
+
   return (
     <div className="bz-main-stack">
       <div className="bz-embed-section">
         <p className="bz-head">Comments</p>
+        <div className="bz-widget-toolbar">
+          <span className="bz-widget-toolbar-count">
+            {loading && approvedCommentTotal === null ? (
+              <span className="bz-skeleton-toolbar-count bz-skeleton-shimmer" aria-hidden />
+            ) : (
+              countSummary
+            )}
+          </span>
+          <div className="bz-widget-toolbar-sort">
+            <nav className="bz-widget-sort-nav" aria-label="Sort comments">
+              {COMMENT_SORT_NAV.map(({ value, label }) => {
+                const active = sort === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    className={active ? "bz-sort-nav-btn bz-sort-nav-btn--active" : "bz-sort-nav-btn"}
+                    disabled={loading}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => {
+                      if (active) return;
+                      setSort(value);
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
         <CommentThreadContext.Provider value={threadCtx}>
-          <div className="bz-thread-entries">
+          <div className="bz-thread-entries" aria-busy={loading || loadingMore}>
             {loading ? (
-              <p className="bz-meta">Loading…</p>
+              <>
+                <span className="bz-sr-only">Loading comments…</span>
+                <BzCommentsThreadSkeleton rows={3} />
+              </>
             ) : rows.length ? (
-              <WidgetCommentThread items={rows} variant="comfortable" />
+              <>
+                <WidgetCommentThread items={rows} variant="comfortable" />
+                {hasMore ? (
+                  <>
+                    <div ref={sentinelRef} className="bz-load-more-sentinel" aria-hidden />
+                    {loadingMore ? (
+                      <>
+                        <span className="bz-sr-only">Loading more comments…</span>
+                        <div className="bz-load-more-skel-wrap" aria-hidden>
+                          <BzCommentsThreadSkeleton rows={2} />
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
             ) : (
               <p className="bz-meta">No comments yet.</p>
             )}
@@ -804,6 +1050,13 @@ export function EmbedCommentsApp({
         variant="comment"
         targetId={reportCommentId}
       />
+      {serviceHost ? (
+        <div className="bz-widget-footer" role="note">
+          <span className="bz-widget-footer-inner" title={ctx.apiBase}>
+            Service: {serviceHost}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
