@@ -49,6 +49,7 @@ export function BzAttachmentsDisplay({
             onClick={() => setViewer(a)}
             aria-label={`View image: ${labelFile(a)}`}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic attachment URLs */}
             <img src={a.url} alt="" className="bz-attachments-thumb" loading="lazy" />
           </button>
         ))}

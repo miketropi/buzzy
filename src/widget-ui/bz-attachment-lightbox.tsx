@@ -95,6 +95,8 @@ export function BzAttachmentLightbox({
   let stage: ReactNode;
   if (attachment.kind === "image") {
     stage = (
+      // Widget shows arbitrary host/upload URLs; next/image remotePatterns are not practical here.
+      // eslint-disable-next-line @next/next/no-img-element -- dynamic attachment URLs
       <img
         className="bz-media-lightbox-img"
         src={attachment.url}

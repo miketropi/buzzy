@@ -21,6 +21,7 @@ export async function resolveSessionCommenterId(
   project: Project,
   settings: EffectiveProjectSettings,
 ): Promise<string | null> {
+  void settings;
   const rawHeader = request.headers.get(BUZZY_HOST_IDENTITY_HEADER)?.trim();
   if (rawHeader && project.embedSsoSecret) {
     const claims = verifyHostSsoAssertion(rawHeader, project.id, project.embedSsoSecret);
@@ -40,6 +41,7 @@ export async function assertRequestActsAsCommenter(
   settings: EffectiveProjectSettings,
   expectedCommenterId: string,
 ) {
+  void settings;
   const token = verifyCommenterToken(request.headers.get("x-commenter-token"), project.id);
   if (token && token.commenterId === expectedCommenterId) {
     const row = await prisma.commenter.findFirst({

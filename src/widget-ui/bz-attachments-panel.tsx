@@ -209,6 +209,7 @@ export function BzAttachmentsPanel({
                 {pendingImages.map((p) => (
                   <div key={p.id} className="bz-attachments-queue-item">
                     <div className="bz-attachments-thumb-wrap">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- blob/object URLs */}
                       <img src={p.previewUrl} alt="" className="bz-attachments-thumb" />
                       {p.error === null ? (
                         <div className="bz-attachments-pending-overlay" aria-hidden>
@@ -234,6 +235,7 @@ export function BzAttachmentsPanel({
                 {g.images.map((a) => (
                   <div key={a.url} className="bz-attachments-queue-item">
                     <div className="bz-attachments-thumb-wrap">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- dynamic attachment URLs */}
                       <img src={a.url} alt="" className="bz-attachments-thumb" loading="lazy" />
                     </div>
                     <button

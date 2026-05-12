@@ -71,7 +71,7 @@ export default async function ProjectsPage() {
   });
 
   const projectIds = projects.map((p) => p.id);
-  let pendingByProject = new Map<string, number>();
+  const pendingByProject = new Map<string, number>();
 
   if (projectIds.length > 0) {
     const [pendingComments, pendingReviews] = await Promise.all([

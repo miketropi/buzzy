@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import {
-  Eye,
   Info,
   LayoutList,
   MousePointer2,
@@ -15,7 +14,7 @@ import { useMemo, useState } from "react";
 import { contrastingForeground, normalizeHexRgb } from "@/lib/contrast-color";
 import { COLOR_PRESETS, type ColorPresetId, presetPrimary } from "@/lib/appearance-presets";
 import type { SubmitButtonStyle } from "@/lib/widget-chrome-tokens";
-import { WIDGET_MODE_PREVIEW, normalizeWidgetMode } from "@/lib/widget-mode-ux";
+import { normalizeWidgetMode } from "@/lib/widget-mode-ux";
 import { WidgetAppearancePreview } from "@/components/widget-appearance-preview";
 
 const themes = ["light", "dark", "auto"] as const;
@@ -67,7 +66,7 @@ export function ProjectAppearanceForm({
   slots?: (parts: { optionsPanel: ReactNode; previewPanel: ReactNode }) => ReactNode;
 }) {
   const router = useRouter();
-  const [mobileTab, setMobileTab] = useState<"options" | "preview">("options");
+  const [mobileTab] = useState<"options" | "preview">("options");
   const [theme, setTheme] = useState(initialTheme);
   const [primaryColor, setPrimaryColor] = useState(initialPrimaryColor);
   const [colorPreset, setColorPreset] = useState<ColorPresetId>(() => {

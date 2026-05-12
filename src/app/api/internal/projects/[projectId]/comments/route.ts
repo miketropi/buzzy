@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { commentInboxWhere, inboxSearchTrimmed } from "@/lib/internal/messages-inbox-query";
-import { requireOwnerId, requireProjectOwned, isUuid } from "@/lib/internal/project-access";
+import { requireOwnerId, requireProjectOwned } from "@/lib/internal/project-access";
 import { getOrCreateStaffCommenter } from "@/lib/internal/staff-commenter";
 import { getEffectiveSettings } from "@/lib/public-api/project-settings";
 import { sanitizeCommentContent, sanitizeCommentHtml } from "@/lib/public-api/sanitize-content";
